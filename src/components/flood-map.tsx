@@ -113,7 +113,7 @@ export function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapPr
   }
 
   return (
-    <div className="relative h-[500px] bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 rounded-xl overflow-hidden border shadow-2xl">
+    <div className="relative h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px] bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 rounded-xl overflow-hidden border shadow-2xl">
       <div className="absolute inset-0" style={{ transform: `scale(${zoomLevel})` }}>
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/20 via-blue-900/30 to-slate-900/40"></div>
 
@@ -214,20 +214,24 @@ export function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapPr
           >
             <div className="group relative">
               <div className="absolute inset-0 rounded-full animate-ping opacity-20">
-                <div className={`w-16 h-16 rounded-full ${getRiskColor(sensor.riskLevel)}`}></div>
+                <div
+                  className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full ${getRiskColor(sensor.riskLevel)}`}
+                ></div>
               </div>
               <div className="absolute inset-0 rounded-full animate-ping opacity-40 animation-delay-150">
-                <div className={`w-12 h-12 rounded-full ${getRiskColor(sensor.riskLevel)} m-2`}></div>
+                <div
+                  className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full ${getRiskColor(sensor.riskLevel)} m-2`}
+                ></div>
               </div>
 
               <div
-                className={`relative ${getRiskColor(sensor.riskLevel)} rounded-full p-4 shadow-2xl border-2 border-white/20 backdrop-blur-sm hover:shadow-3xl transition-all duration-200`}
+                className={`relative ${getRiskColor(sensor.riskLevel)} rounded-full p-2 sm:p-3 md:p-4 shadow-2xl border-2 border-white/20 backdrop-blur-sm hover:shadow-3xl transition-all duration-200`}
               >
                 <MapPinIcon />
 
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                <div className="absolute -top-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-full flex items-center justify-center">
                   <div
-                    className={`w-2 h-2 rounded-full ${
+                    className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
                       sensor.riskLevel === "danger"
                         ? "bg-red-500"
                         : sensor.riskLevel === "alert"
@@ -239,56 +243,77 @@ export function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapPr
               </div>
 
               <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                <div className="bg-slate-800 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-xl border border-slate-600">
-                  <div className="font-semibold text-white">{sensor.name}</div>
-                  <div className="text-xs text-slate-200">Clic para ver detalles</div>
+                <div className="bg-slate-800 text-white text-xs rounded-lg px-2 sm:px-3 py-1 sm:py-2 whitespace-nowrap shadow-xl border border-slate-600">
+                  <div className="font-semibold text-white text-xs sm:text-sm">{sensor.name}</div>
+                  <div className="text-xs text-slate-200 hidden sm:block">Clic para ver detalles</div>
                 </div>
               </div>
             </div>
 
             {selectedSensor === sensor.id && (
-              <Card className="absolute top-full left-1/2 transform -translate-x-1/2 mt-4 w-48 z-40 shadow-2xl border border-slate-200 bg-white">
-                <div className="p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-bold text-xs text-slate-800">{sensor.name}</h3>
-                    <Badge className={`${getBadgeRiskColor(sensor.riskLevel)} shadow-lg text-xs px-1 py-0`}>
-                      {sensor.riskLevel.toUpperCase()}
+              <Card className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 sm:mt-4 w-40 sm:w-48 md:w-52 z-40 shadow-2xl border border-slate-200 bg-white">
+                <div className="p-2 sm:p-3">
+                  <div className="flex items-center justify-between mb-1 sm:mb-2">
+                    <h3 className="font-bold text-xs sm:text-sm text-slate-800 truncate pr-2">{sensor.name}</h3>
+                    <Badge
+                      className={`${getBadgeRiskColor(sensor.riskLevel)} shadow-lg text-xs px-1 py-0 flex-shrink-0`}
+                    >
+                      <span className="hidden sm:inline">{sensor.riskLevel.toUpperCase()}</span>
+                      <span className="sm:hidden">{sensor.riskLevel.charAt(0).toUpperCase()}</span>
                     </Badge>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-2 mb-2">
-                    <div className="bg-blue-50 rounded-md p-2 border border-blue-100">
+                  <div className="grid grid-cols-1 gap-1 sm:gap-2 mb-1 sm:mb-2">
+                    <div className="bg-blue-50 rounded-md p-1.5 sm:p-2 border border-blue-100">
                       <div className="flex items-center space-x-1 mb-1">
                         <DropletsIcon />
-                        <span className="text-xs font-medium text-blue-800">Nivel de agua</span>
+                        <span className="text-xs font-medium text-blue-800">
+                          <span className="hidden sm:inline">Nivel de agua</span>
+                          <span className="sm:hidden">Nivel</span>
+                        </span>
                       </div>
-                      <span className="text-lg font-bold text-blue-900">{sensor.waterLevel.toFixed(1)} cm</span>
+                      <span className="text-sm sm:text-lg font-bold text-blue-900">
+                        {sensor.waterLevel.toFixed(1)} cm
+                      </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-1">
-                      <div className="bg-green-50 rounded-md p-1.5 border border-green-100">
+                      <div className="bg-green-50 rounded-md p-1 sm:p-1.5 border border-green-100">
                         <div className="flex items-center space-x-1 mb-1">
                           <ActivityIcon />
-                          <span className="text-xs font-medium text-green-800">Caudal</span>
+                          <span className="text-xs font-medium text-green-800">
+                            <span className="hidden sm:inline">Caudal</span>
+                            <span className="sm:hidden">C</span>
+                          </span>
                         </div>
-                        <span className="text-sm font-bold text-green-900">{sensor.flowRate.toFixed(0)} L/s</span>
+                        <span className="text-xs sm:text-sm font-bold text-green-900">
+                          {sensor.flowRate.toFixed(0)} L/s
+                        </span>
                       </div>
 
-                      <div className="bg-orange-50 rounded-md p-1.5 border border-orange-100">
+                      <div className="bg-orange-50 rounded-md p-1 sm:p-1.5 border border-orange-100">
                         <div className="flex items-center space-x-1 mb-1">
                           <ThermometerIcon />
-                          <span className="text-xs font-medium text-orange-800">Humedad</span>
+                          <span className="text-xs font-medium text-orange-800">
+                            <span className="hidden sm:inline">Humedad</span>
+                            <span className="sm:hidden">H</span>
+                          </span>
                         </div>
-                        <span className="text-sm font-bold text-orange-900">{sensor.soilMoisture.toFixed(0)}%</span>
+                        <span className="text-xs sm:text-sm font-bold text-orange-900">
+                          {sensor.soilMoisture.toFixed(0)}%
+                        </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="text-xs text-slate-600 pt-1.5 border-t border-slate-200 flex items-center justify-between">
-                    <span className="text-xs">Actualizado: {sensor.lastUpdate}</span>
-                    <div className="flex items-center space-x-1">
+                  <div className="text-xs text-slate-600 pt-1 sm:pt-1.5 border-t border-slate-200 flex items-center justify-between">
+                    <span className="text-xs truncate">
+                      <span className="hidden sm:inline">Actualizado: {sensor.lastUpdate}</span>
+                      <span className="sm:hidden">{sensor.lastUpdate}</span>
+                    </span>
+                    <div className="flex items-center space-x-1 flex-shrink-0">
                       <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                      <span className="text-slate-600 text-xs">En línea</span>
+                      <span className="text-slate-600 text-xs hidden sm:inline">En línea</span>
                     </div>
                   </div>
                 </div>
@@ -298,13 +323,13 @@ export function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapPr
         )
       })}
 
-      <div className="absolute top-4 right-4 flex flex-col space-y-2">
-        <div className="bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-lg">
+      <div className="absolute top-2 sm:top-4 right-2 sm:right-4 flex flex-col space-y-1 sm:space-y-2">
+        <div className="bg-white/90 backdrop-blur-sm rounded-lg p-1 sm:p-2 shadow-lg">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setZoomLevel(Math.min(2, zoomLevel + 0.2))}
-            className="w-8 h-8 p-0"
+            className="w-6 h-6 sm:w-8 sm:h-8 p-0"
           >
             <ZoomInIcon />
           </Button>
@@ -312,45 +337,54 @@ export function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapPr
             variant="ghost"
             size="sm"
             onClick={() => setZoomLevel(Math.max(0.5, zoomLevel - 0.2))}
-            className="w-8 h-8 p-0"
+            className="w-6 h-6 sm:w-8 sm:h-8 p-0"
           >
             <ZoomOutIcon />
           </Button>
         </div>
 
-        <div className="bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-lg">
-          <Button variant="ghost" size="sm" onClick={() => setShowLayers(!showLayers)} className="w-8 h-8 p-0">
+        <div className="bg-white/90 backdrop-blur-sm rounded-lg p-1 sm:p-2 shadow-lg">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowLayers(!showLayers)}
+            className="w-6 h-6 sm:w-8 sm:h-8 p-0"
+          >
             <LayersIcon />
           </Button>
         </div>
       </div>
 
-      <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-md rounded-xl p-4 shadow-2xl border border-white/20">
-        <h4 className="font-bold text-sm mb-3 text-slate-800">Niveles de Riesgo</h4>
-        <div className="space-y-2">
-          <div className="flex items-center space-x-3">
-            <div className="w-4 h-4 bg-green-600 rounded-full shadow-sm"></div>
-            <span className="text-sm font-medium text-slate-700">Normal</span>
+      <div className="absolute bottom-2 sm:bottom-4 left-2 sm:left-4 bg-white/95 backdrop-blur-md rounded-xl p-2 sm:p-4 shadow-2xl border border-white/20">
+        <h4 className="font-bold text-xs sm:text-sm mb-2 sm:mb-3 text-slate-800">
+          <span className="hidden sm:inline">Niveles de Riesgo</span>
+          <span className="sm:hidden">Riesgo</span>
+        </h4>
+        <div className="space-y-1 sm:space-y-2">
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-green-600 rounded-full shadow-sm"></div>
+            <span className="text-xs sm:text-sm font-medium text-slate-700">Normal</span>
           </div>
-          <div className="flex items-center space-x-3">
-            <div className="w-4 h-4 bg-yellow-600 rounded-full shadow-sm"></div>
-            <span className="text-sm font-medium text-slate-700">Alerta</span>
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-yellow-600 rounded-full shadow-sm"></div>
+            <span className="text-xs sm:text-sm font-medium text-slate-700">Alerta</span>
           </div>
-          <div className="flex items-center space-x-3">
-            <div className="w-4 h-4 bg-red-600 rounded-full shadow-sm"></div>
-            <span className="text-sm font-medium text-slate-700">Peligro</span>
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-red-600 rounded-full shadow-sm"></div>
+            <span className="text-xs sm:text-sm font-medium text-slate-700">Peligro</span>
           </div>
         </div>
 
-        <div className="mt-3 pt-3 border-t border-slate-200">
+        <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-slate-200">
           <div className="flex items-center space-x-2 text-xs text-slate-600">
             <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-            <span>Actualización en tiempo real</span>
+            <span className="hidden sm:inline">Actualización en tiempo real</span>
+            <span className="sm:hidden">Tiempo real</span>
           </div>
         </div>
       </div>
 
-      <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-sm rounded-lg p-2 shadow-lg border border-white/20">
+      <div className="absolute top-2 sm:top-4 left-2 sm:left-4 bg-white/95 backdrop-blur-sm rounded-lg p-1 sm:p-2 shadow-lg border border-white/20">
         <div className="flex space-x-1">
           {(["satellite", "terrain", "hybrid"] as const).map((view) => (
             <Button
@@ -358,7 +392,7 @@ export function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapPr
               variant={mapView === view ? "default" : "ghost"}
               size="sm"
               onClick={() => setMapView(view)}
-              className="text-xs px-3 py-2 h-auto font-medium"
+              className="text-xs px-2 sm:px-3 py-1 sm:py-2 h-auto font-medium"
               title={view === "satellite" ? "Vista Satélite" : view === "terrain" ? "Vista Terreno" : "Vista Híbrida"}
             >
               {view === "satellite" ? "🛰️" : view === "terrain" ? "🗻" : "🌍"}
