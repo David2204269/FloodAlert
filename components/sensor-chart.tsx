@@ -82,27 +82,9 @@ export function SensorChart({ type, sensors }: SensorChartProps) {
     }
   }, [isFullscreen])
 
-  // Generate mock data points for the last 24 hours
-  const generateMockData = () => {
-    return Array.from({ length: 24 }, (_, i) => {
-      const hour = new Date()
-      hour.setHours(hour.getHours() - (23 - i))
-      return {
-        hour: hour.getHours(),
-        values: sensors.map((sensor, index) => {
-          const baseValue = sensor[type]
-          const variation = (Math.random() - 0.5) * 20
-          return {
-            name: sensor.name,
-            value: Math.max(0, baseValue + variation),
-            color: colors[index % colors.length],
-          }
-        }),
-      }
-    })
-  }
-
-  const data = generateMockData()
+  // TODO: Replace with real data from API/hook
+  // Data should come from useSensorData hook with historical readings
+  const data = [] // Placeholder for real data from API
 
   const getChartTitle = () => {
     switch (type) {

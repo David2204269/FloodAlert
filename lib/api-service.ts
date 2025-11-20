@@ -76,87 +76,23 @@ export async function registrarLectura(lectura: Lectura): Promise<Lectura | null
 }
 
 /**
- * Obtener sensores configurados (será un endpoint que implementaremos)
- * Por ahora retorna sensores mock con datos de las lecturas
+ * Obtener sensores configurados desde API
+ * NOTA: Endpoint debe ser implementado en backend
  */
 export async function obtenerSensores(): Promise<Sensor[]> {
   try {
-    const lecturas = await obtenerLecturas();
-
-    // Generar sensores mock basados en lecturas
-    // En producción, habría un endpoint específico para esto
-    const sensoresMap = new Map<string, Sensor>();
-
-    const sensoresDefault: Sensor[] = [
-      {
-        id: "sensor-1",
-        nombre: "Estación Río Principal",
-        descripcion: "Sensor de nivel en río principal",
-        ubicacion: {
-          latitud: 10.3521,
-          longitud: -75.4727,
-          zona: "Centro",
-          provincia: "Atlántico",
-        },
-        tipo: "NIVEL_AGUA",
-        estado: "ACTIVO",
-        umbralAlerta: {
-          lluviaMax: 500,
-          nivelCrítico: "CRÍTICO",
-          flujoMax: 250,
-        },
-      },
-      {
-        id: "sensor-2",
-        nombre: "Pluviómetro Zona Norte",
-        descripcion: "Sensor de lluvia acumulada",
-        ubicacion: {
-          latitud: 10.4521,
-          longitud: -75.4727,
-          zona: "Norte",
-          provincia: "Atlántico",
-        },
-        tipo: "PLUVIÓMETRO",
-        estado: "ACTIVO",
-        umbralAlerta: {
-          lluviaMax: 400,
-          nivelCrítico: "ALTO",
-          flujoMax: 200,
-        },
-      },
-      {
-        id: "sensor-3",
-        nombre: "Estación Híbrida Sur",
-        descripcion: "Sensor multifunción",
-        ubicacion: {
-          latitud: 10.2521,
-          longitud: -75.4727,
-          zona: "Sur",
-          provincia: "Atlántico",
-        },
-        tipo: "HÍBRIDO",
-        estado: "ACTIVO",
-        umbralAlerta: {
-          lluviaMax: 450,
-          nivelCrítico: "ALTO",
-          flujoMax: 200,
-        },
-      },
-    ];
-
-    // Asignar última lectura a cada sensor
-    sensoresDefault.forEach((sensor) => {
-      const ultimaLectura = lecturas
-        .filter((l) => l.sensorId === sensor.id)
-        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
-
-      if (ultimaLectura) {
-        sensor.ultimaLectura = ultimaLectura;
-        sensor.ultimaActualizacion = new Date(ultimaLectura.timestamp * 1000);
-      }
+    const response = await fetch(`${API_BASE_URL}/sensores/configuracion`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
     });
 
-    return sensoresDefault;
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const data: ApiResponse<Sensor[]> = await response.json();
+    return data.data || [];
   } catch (error) {
     console.error("Error al obtener sensores:", error);
     return [];
