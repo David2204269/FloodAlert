@@ -1,6 +1,6 @@
 'use client'
 
-import { FloodDashboard } from "@/components/flood-dashboard"
+import { FloodDashboardImproved } from "@/components/flood-dashboard-improved"
 import { useEffect } from "react"
 import { registerServiceWorker } from "@/lib/register-service-worker"
 
@@ -9,5 +9,5 @@ export default function Home() {
     registerServiceWorker()
   }, [])
 
-  return <FloodDashboard />
+  return <FloodDashboardImproved />
 }

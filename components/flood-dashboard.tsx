@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,36 +8,51 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FloodMap } from "./flood-map"
 import { SensorChart } from "./sensor-chart"
 import { AlertPanel } from "./alert-panel"
-import { WaterSegmentation } from "./water-segmentation"
-import { useNotifications } from "@/hooks/use-notifications"
+import { useSensorData } from "@/hooks/use-sensor-data"
+import { Sensor, Lectura, NivelFlotador } from "@/src/types"
 
-interface SensorData {
-  id: string
-  name: string
-  location: { lat: number; lng: number }
-  waterLevel: number
-  flowRate: number
-  soilMoisture: number
-  temperature: number
-  precipitation: number
-  riskLevel: "normal" | "alert" | "danger"
-  lastUpdate: string
+/**
+ * Mapear datos reales de la API a formato del componente
+ */
+function mapearSensorADatos(sensor: Sensor, lectura?: Lectura) {
+  if (!lectura) {
+    return {
+      id: sensor.id,
+      name: sensor.nombre,
+      location: { lat: sensor.ubicacion.latitud, lng: sensor.ubicacion.longitud },
+      waterLevel: 0,
+      flowRate: 0,
+      soilMoisture: 0,
+      temperature: 0,
+      precipitation: 0,
+      riskLevel: "normal" as const,
+      lastUpdate: "N/A",
+      nivel_flotador: "NORMAL" as NivelFlotador,
+    }
+  }
+
+  // Mapear nivel de riesgo basado en el flotador
+  const riskLevel =
+    lectura.nivel_flotador === "CRÍTICO"
+      ? "danger"
+      : lectura.nivel_flotador === "ALTO"
+        ? "alert"
+        : "normal"
+
+  return {
+    id: sensor.id,
+    name: sensor.nombre,
+    location: { lat: sensor.ubicacion.latitud, lng: sensor.ubicacion.longitud },
+    waterLevel: lectura.flujo_lmin || 0,
+    flowRate: lectura.flujo_lmin || 0,
+    soilMoisture: lectura.humedad_ao || 0,
+    temperature: lectura.temperatura_c || 0,
+    precipitation: lectura.lluvia_ao || 0,
+    riskLevel,
+    lastUpdate: new Date(lectura.timestamp * 1000).toLocaleString("es-ES"),
+    nivel_flotador: lectura.nivel_flotador,
+  }
 }
-
-const mockSensorData: SensorData[] = [
-  {
-    id: "1",
-    name: "Río Principal - Zona de Riesgo",
-    location: { lat: 7.355329655761653, lng: -73.9032701646408 },
-    waterLevel: 45,
-    flowRate: 120,
-    soilMoisture: 65,
-    temperature: 24.5,
-    precipitation: 12.3,
-    riskLevel: "normal",
-    lastUpdate: "2 min ago",
-  },
-]
 
 const CheckCircleIcon = () => (
   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -215,24 +230,17 @@ const SensorCard = ({
 }
 
 export function FloodDashboard() {
-  const [sensors, setSensors] = useState<SensorData[]>(mockSensorData)
-  const [selectedSensor, setSelectedSensor] = useState<string | null>(null)
+  const { sensores, lecturas, alertas, loading, nivelRiesgo, ultimaActualizacion } = useSensorData()
+  const [selectedSensorId, setSelectedSensorId] = useState<string | null>(null)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
-  const [alerts, setAlerts] = useState([
-    {
-      id: "1",
-      type: "danger",
-      message: "⚠️ Alto riesgo de inundación en Área Industrial",
-      timestamp: "2 min ago",
-      location: "Sensor C",
-    },
-    {
-      id: "2",
-      type: "alert",
-      message: "🟡 Nivel de agua elevado en Zona Urbana",
-      timestamp: "5 min ago",
-      location: "Sensor B",
-    },
+
+  // Mapear sensores a datos del componente
+  const sensorDatos = sensores.map((sensor) => {
+    const ultimaLectura = sensor.ultimaLectura
+    return mapearSensorADatos(sensor, ultimaLectura)
+  })
+
+  const selectedSensor = sensorDatos.find((s) => s.id === selectedSensorId) || sensorDatos[0]
   ])
 
   const [showNotifications, setShowNotifications] = useState(false)
