@@ -6,13 +6,34 @@
 import { Lectura, Sensor, Alerta, EstadisticasSensor, ApiResponse } from "@/src/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
+const FETCH_TIMEOUT = 10000; // 10 segundos
+
+/**
+ * Helper para fetch con timeout
+ */
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = FETCH_TIMEOUT): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+}
 
 /**
  * Obtener todas las lecturas de sensores
  */
 export async function obtenerLecturas(): Promise<Lectura[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/sensores`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/sensores`, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
       cache: "no-store",
@@ -80,7 +101,7 @@ export async function registrarLectura(lectura: Lectura): Promise<Lectura | null
  */
 export async function obtenerSensores(): Promise<Sensor[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/sensores/configuracion`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/sensores/configuracion`, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
       cache: "no-store",
@@ -88,7 +109,6 @@ export async function obtenerSensores(): Promise<Sensor[]> {
 
     if (!response.ok) {
       console.warn(`API error: ${response.status}`);
-      // Retornar array vacío si el endpoint falla
       return [];
     }
 
@@ -96,7 +116,6 @@ export async function obtenerSensores(): Promise<Sensor[]> {
     return data.data || [];
   } catch (error) {
     console.error("Error al obtener sensores:", error);
-    // Retornar array vacío en caso de error
     return [];
   }
 }

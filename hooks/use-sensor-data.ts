@@ -19,6 +19,7 @@ import {
 } from "@/lib/alert-logic";
 
 const POLLING_INTERVAL = 60000; // 1 minuto
+const LOADING_TIMEOUT = 15000; // 15 segundos máximo de carga
 
 export function useSensorData() {
   const [state, setState] = useState<AppState>({
@@ -120,7 +121,21 @@ export function useSensorData() {
    * Efecto: cargar datos inicialmente y configurar polling
    */
   useEffect(() => {
+    let loadingTimeoutRef: NodeJS.Timeout | null = null;
+
+    // Cargar datos inmediatamente
     cargarDatos();
+
+    // Timeout de seguridad para que nunca se quede en loading
+    loadingTimeoutRef = setTimeout(() => {
+      if (isMountedRef.current) {
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          error: prev.error || "Timeout cargando datos",
+        }));
+      }
+    }, LOADING_TIMEOUT);
 
     // Configurar polling
     pollingRef.current = setInterval(cargarDatos, POLLING_INTERVAL);
@@ -129,6 +144,9 @@ export function useSensorData() {
       isMountedRef.current = false;
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
+      }
+      if (loadingTimeoutRef) {
+        clearTimeout(loadingTimeoutRef);
       }
     };
   }, [cargarDatos]);
