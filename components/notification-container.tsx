@@ -13,36 +13,80 @@ interface Notification {
 
 export function NotificationContainer() {
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [isConnected, setIsConnected] = useState(false)
 
   useEffect(() => {
-    const eventSource = new EventSource("/api/alerts-stream")
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
 
-    eventSource.onmessage = (event) => {
+    const connectToAlertStream = () => {
       try {
-        const alert = JSON.parse(event.data)
-        const newNotification: Notification = {
-          id: `${Date.now()}-${Math.random()}`,
-          level: alert.level,
-          message: alert.message,
-          sensorId: alert.sensorId,
-          timestamp: alert.timestamp || new Date().toLocaleTimeString(),
+        eventSource = new EventSource("/api/alerts-stream")
+
+        eventSource.onopen = () => {
+          console.log("[Alerts] Connected to stream")
+          setIsConnected(true)
         }
-        
-        console.log("[v0] New alert received:", newNotification)
-        
-        setNotifications((prev) => [newNotification, ...prev])
+
+        eventSource.onmessage = (event) => {
+          try {
+            const alert = JSON.parse(event.data)
+            
+            // Ignore system messages
+            if (alert.type === 'connected' || alert.message?.includes('keep-alive')) {
+              console.log("[Alerts] System message:", alert.message)
+              return
+            }
+
+            const newNotification: Notification = {
+              id: `${Date.now()}-${Math.random()}`,
+              level: alert.level || "warning",
+              message: alert.message || "Nueva alerta del sistema",
+              sensorId: alert.sensorId || "unknown",
+              timestamp: alert.timestamp || new Date().toLocaleTimeString(),
+            }
+            
+            console.log("[Alerts] New alert received:", newNotification)
+            setNotifications((prev) => [newNotification, ...prev].slice(0, 10))
+          } catch (error) {
+            console.warn("Error parsing alert message (might be keep-alive):", error)
+          }
+        }
+
+        eventSource.onerror = (error) => {
+          console.error("[Alerts] EventSource error:", error)
+          setIsConnected(false)
+          
+          if (eventSource) {
+            eventSource.close()
+            eventSource = null
+          }
+
+          // Attempt to reconnect after 5 seconds
+          reconnectTimeout = setTimeout(() => {
+            console.log("[Alerts] Attempting to reconnect...")
+            connectToAlertStream()
+          }, 5000)
+        }
       } catch (error) {
-        console.error("Error parsing alert:", error)
+        console.error("[Alerts] Error creating EventSource:", error)
+        setIsConnected(false)
+        
+        // Retry connection after delay
+        reconnectTimeout = setTimeout(connectToAlertStream, 5000)
       }
     }
 
-    eventSource.onerror = (error) => {
-      console.error("EventSource error:", error)
-      eventSource.close()
-    }
+    connectToAlertStream()
 
     return () => {
-      eventSource.close()
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
+      if (eventSource) {
+        eventSource.close()
+      }
+      setIsConnected(false)
     }
   }, [])
 
