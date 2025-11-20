@@ -27,7 +27,7 @@ export function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapPr
   const markersRef = useRef<any[]>([])
 
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "AIzaSyAGBwVw8JH6eg585Q1Ig-_93dK0SGdcrDU";
 
     console.log("[v0] Google Maps API Key exists:", !!apiKey)
     console.log("[v0] API Key length:", apiKey?.length || 0)
