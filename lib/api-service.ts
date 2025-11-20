@@ -77,7 +77,6 @@ export async function registrarLectura(lectura: Lectura): Promise<Lectura | null
 
 /**
  * Obtener sensores configurados desde API
- * NOTA: Endpoint debe ser implementado en backend
  */
 export async function obtenerSensores(): Promise<Sensor[]> {
   try {
@@ -88,13 +87,16 @@ export async function obtenerSensores(): Promise<Sensor[]> {
     });
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      console.warn(`API error: ${response.status}`);
+      // Retornar array vacío si el endpoint falla
+      return [];
     }
 
     const data: ApiResponse<Sensor[]> = await response.json();
     return data.data || [];
   } catch (error) {
     console.error("Error al obtener sensores:", error);
+    // Retornar array vacío en caso de error
     return [];
   }
 }

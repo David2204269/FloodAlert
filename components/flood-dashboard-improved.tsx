@@ -178,6 +178,7 @@ export function FloodDashboardImproved() {
     alertas,
     estadisticas,
     loading,
+    error,
     nivelRiesgo,
     ultimaActualizacion,
     alertasCriticas,
@@ -195,11 +196,56 @@ export function FloodDashboardImproved() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-slate-600">Cargando datos...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-500 mx-auto mb-4"></div>
+          <p className="text-slate-600 font-medium">Cargando datos del sistema...</p>
         </div>
+      </div>
+    )
+  }
+
+  if (!sensores || sensores.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">
+            Sistema de Alerta de Inundaciones
+          </h1>
+        </div>
+
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardContent className="p-8 text-center">
+            <div className="text-6xl mb-4">⚙️</div>
+            <h2 className="text-xl font-semibold text-slate-900 mb-2">
+              Sin sensores configurados
+            </h2>
+            <p className="text-slate-600 mb-4">
+              {error || "No hay sensores activos en el sistema. Por favor, registre un sensor primero."}
+            </p>
+            <p className="text-sm text-slate-500 mt-4">
+              Los sensores aparecerán automáticamente cuando envíen datos a través de la API.
+            </p>
+          </CardContent>
+        </Card>
+
+        {lecturas && lecturas.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-lg font-semibold mb-4">Datos Recientes</h2>
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-sm text-slate-600">
+                  Se han registrado {lecturas.length} lecturas en el sistema.
+                  {ultimaActualizacion && (
+                    <div className="mt-2">
+                      Última actualización: {ultimaActualizacion.toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     )
   }

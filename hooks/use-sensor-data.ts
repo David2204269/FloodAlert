@@ -38,16 +38,46 @@ export function useSensorData() {
    */
   const cargarDatos = useCallback(async () => {
     try {
-      const [sensores, lecturas] = await Promise.all([
-        obtenerSensores(),
-        obtenerLecturas(),
-      ]);
+      // Cargar sensores y lecturas en paralelo
+      let sensores: Sensor[] = [];
+      let lecturas: Lectura[] = [];
+      let error: string | undefined = undefined;
+
+      try {
+        sensores = await obtenerSensores();
+      } catch (err) {
+        console.warn("Error al obtener sensores:", err);
+        error = "No se pudo cargar la configuración de sensores";
+      }
+
+      try {
+        lecturas = await obtenerLecturas();
+      } catch (err) {
+        console.warn("Error al obtener lecturas:", err);
+        if (!error) {
+          error = "No se pudo cargar las lecturas";
+        }
+      }
 
       if (!isMountedRef.current) return;
 
+      // Si no hay sensores, usar un array vacío y no continuar
+      if (!sensores || sensores.length === 0) {
+        setState({
+          sensores: [],
+          lecturas: lecturas || [],
+          alertas: [],
+          estadisticas: [],
+          loading: false,
+          ultimaActualizacion: new Date(),
+          error: error || "No hay sensores configurados",
+        });
+        return;
+      }
+
       // Calcular estadísticas para cada sensor
       const estadisticas = sensores.map((sensor) =>
-        calcularEstadisticas(sensor.id, sensor.nombre, lecturas, "24h")
+        calcularEstadisticas(sensor.id, sensor.nombre, lecturas || [], "24h")
       );
 
       // Evaluar alertas basadas en última lectura de cada sensor
@@ -55,7 +85,7 @@ export function useSensorData() {
       sensores.forEach((sensor) => {
         const ultimaLectura = sensor.ultimaLectura;
         if (ultimaLectura) {
-          const alerta = evaluarAlerta(ultimaLectura, sensor, lecturas);
+          const alerta = evaluarAlerta(ultimaLectura, sensor, lecturas || []);
           if (alerta) {
             alertasGeneradas.push(alerta);
           }
@@ -67,14 +97,15 @@ export function useSensorData() {
 
       setState({
         sensores,
-        lecturas,
+        lecturas: lecturas || [],
         alertas: alertasUnicas,
         estadisticas,
         loading: false,
         ultimaActualizacion: new Date(),
+        error,
       });
     } catch (error) {
-      console.error("Error cargando datos:", error);
+      console.error("Error crítico cargando datos:", error);
       if (isMountedRef.current) {
         setState((prev) => ({
           ...prev,
