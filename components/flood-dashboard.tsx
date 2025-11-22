@@ -39,18 +39,29 @@ function mapearSensorADatos(sensor: Sensor, lectura?: Lectura) {
         ? "alert"
         : "normal"
 
+  // Mapear datos correctamente desde el formato TTGO
+  const waterLevel = lectura.water_level_cm || lectura.nivelAgua || 0;
+  const flowRate = lectura.flujo_lmin || lectura.flow_rate_lmin || 0;
+  const soilMoisture = lectura.humedad_ao || lectura.humidity_percent || 0;
+  const temperature = lectura.temperatura_c || lectura.temperature_c || 0;
+  const precipitation = lectura.lluvia_ao || lectura.rain_accumulated_mm || 0;
+  
   return {
     id: sensor.id,
     name: sensor.nombre,
     location: { lat: sensor.ubicacion.latitud, lng: sensor.ubicacion.longitud },
-    waterLevel: lectura.flujo_lmin || 0,
-    flowRate: lectura.flujo_lmin || 0,
-    soilMoisture: lectura.humedad_ao || 0,
-    temperature: lectura.temperatura_c || 0,
-    precipitation: lectura.lluvia_ao || 0,
+    waterLevel,
+    flowRate,
+    soilMoisture,
+    temperature,
+    precipitation,
     riskLevel,
-    lastUpdate: new Date(lectura.timestamp * 1000).toLocaleString("es-ES"),
-    nivel_flotador: lectura.nivel_flotador,
+    lastUpdate: lectura.timestamp 
+      ? new Date(lectura.timestamp * 1000).toLocaleString("es-ES")
+      : lectura.createdAt 
+        ? lectura.createdAt.toLocaleString("es-ES")
+        : "N/A",
+    nivel_flotador: lectura.nivel_flotador || "NORMAL",
   }
 }
 
@@ -187,7 +198,7 @@ const SensorCard = ({
               <DropletsIcon />
               <span className="font-medium">Nivel de agua</span>
             </div>
-            <span className="font-bold text-blue-900">{sensor.waterLevel.toFixed(1)} cm</span>
+            <span className="font-bold text-blue-900">{sensor.waterLevel.toFixed(2)} m</span>
           </div>
           
           <div className="flex items-center justify-between p-2 bg-green-50 rounded-lg">
@@ -195,7 +206,7 @@ const SensorCard = ({
               <ActivityIcon />
               <span className="font-medium">Caudal</span>
             </div>
-            <span className="font-bold text-green-900">{sensor.flowRate.toFixed(0)} L/s</span>
+            <span className="font-bold text-green-900">{sensor.flowRate.toFixed(1)} L/min</span>
           </div>
           
           <div className="flex items-center justify-between p-2 bg-orange-50 rounded-lg">

@@ -107,33 +107,44 @@ function SensorCard({ sensor, lectura, isSelected, onClick }: {
             <span className="flex items-center gap-1">
               <DropletsIcon /> Lluvia
             </span>
-            <span className="font-bold">{lectura.lluvia_ao.toFixed(1)} mm</span>
+            <span className="font-bold">{(lectura.lluvia_ao || lectura.rain_accumulated_mm || 0).toFixed(1)} mm</span>
           </div>
 
           <div className="flex justify-between p-2 bg-orange-50 rounded">
             <span className="flex items-center gap-1">
               <ThermometerIcon /> Humedad
             </span>
-            <span className="font-bold">{lectura.humedad_ao.toFixed(0)}%</span>
+            <span className="font-bold">{(lectura.humedad_ao || lectura.humidity_percent || 0).toFixed(0)}%</span>
           </div>
 
           <div className="flex justify-between p-2 bg-green-50 rounded">
             <span className="flex items-center gap-1">
               <CloudRainIcon /> Flujo
             </span>
-            <span className="font-bold">{lectura.flujo_lmin.toFixed(1)} L/min</span>
+            <span className="font-bold">{(lectura.flujo_lmin || lectura.flow_rate_lmin || 0).toFixed(1)} L/min</span>
           </div>
 
           <div className="flex justify-between p-2 bg-red-50 rounded">
             <span className="flex items-center gap-1">
               <ThermometerIcon /> Temp
             </span>
-            <span className="font-bold">{lectura.temperatura_c.toFixed(1)}°C</span>
+            <span className="font-bold">{(lectura.temperatura_c || lectura.temperature_c || 0).toFixed(1)}°C</span>
+          </div>
+          
+          <div className="flex justify-between p-2 bg-purple-50 rounded">
+            <span className="flex items-center gap-1">
+              <DropletsIcon /> Nivel
+            </span>
+            <span className="font-bold">{((lectura.water_level_cm || lectura.nivelAgua || 0) / 100).toFixed(2)} m</span>
           </div>
         </div>
 
         <div className="text-xs text-slate-500 pt-2 border-t mt-2">
-          {new Date(lectura.timestamp * 1000).toLocaleTimeString()}
+          {lectura.timestamp 
+            ? new Date(lectura.timestamp * 1000).toLocaleTimeString("es-ES")
+            : lectura.createdAt 
+              ? lectura.createdAt.toLocaleTimeString("es-ES")
+              : "Sin timestamp"}
         </div>
       </CardContent>
     </Card>
@@ -329,27 +340,33 @@ export function FloodDashboardImproved() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center p-3 bg-blue-50 rounded">
                     <div className="text-2xl font-bold text-blue-600">
-                      {selectedLectura.lluvia_ao.toFixed(1)}
+                      {(selectedLectura.lluvia_ao || selectedLectura.rain_accumulated_mm || 0).toFixed(1)}
                     </div>
                     <div className="text-xs text-slate-600 mt-1">Lluvia (mm)</div>
                   </div>
                   <div className="text-center p-3 bg-orange-50 rounded">
                     <div className="text-2xl font-bold text-orange-600">
-                      {selectedLectura.humedad_ao.toFixed(0)}
+                      {(selectedLectura.humedad_ao || selectedLectura.humidity_percent || 0).toFixed(0)}
                     </div>
                     <div className="text-xs text-slate-600 mt-1">Humedad (%)</div>
                   </div>
                   <div className="text-center p-3 bg-green-50 rounded">
                     <div className="text-2xl font-bold text-green-600">
-                      {selectedLectura.flujo_lmin.toFixed(1)}
+                      {(selectedLectura.flujo_lmin || selectedLectura.flow_rate_lmin || 0).toFixed(1)}
                     </div>
                     <div className="text-xs text-slate-600 mt-1">Flujo (L/min)</div>
                   </div>
                   <div className="text-center p-3 bg-red-50 rounded">
                     <div className="text-2xl font-bold text-red-600">
-                      {selectedLectura.temperatura_c.toFixed(1)}
+                      {(selectedLectura.temperatura_c || selectedLectura.temperature_c || 0).toFixed(1)}
                     </div>
                     <div className="text-xs text-slate-600 mt-1">Temp (°C)</div>
+                  </div>
+                  <div className="text-center p-3 bg-purple-50 rounded">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {((selectedLectura.water_level_cm || selectedLectura.nivelAgua || 0) / 100).toFixed(2)}
+                    </div>
+                    <div className="text-xs text-slate-600 mt-1">Nivel (m)</div>
                   </div>
                 </div>
 

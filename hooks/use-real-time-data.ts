@@ -11,14 +11,24 @@ import { io, Socket } from "socket.io-client";
 interface WebSocketReadingUpdate {
   data: {
     sensor_id: string;
-    gateway_id: string;
-    timestamp: number;
-    water_level_cm: number;
-    rain_accumulated_mm: number;
-    flow_rate_lmin: number;
-    temperature_c: number;
-    humidity_percent: number;
-    battery_percent: number;
+    gateway_id?: string;
+    timestamp: number | string | Date;
+    
+    // Formato TTGO (nuevo)
+    temperatura_c?: number;
+    humedad_pct?: number;
+    caudal_l_s?: number;
+    lluvia_mm?: number;
+    nivel_m?: number;
+    seq?: number;
+    
+    // Formato legacy (compatibilidad)
+    water_level_cm?: number;
+    rain_accumulated_mm?: number;
+    flow_rate_lmin?: number;
+    temperature_c?: number;
+    humidity_percent?: number;
+    battery_percent?: number;
     rssi?: number;
     snr?: number;
     signal_quality?: "excellent" | "good" | "fair" | "poor";
@@ -43,46 +53,77 @@ export function useRealTimeSensorData(options: UseRealTimeSensorDataOptions = {}
   } = options;
 
   const socketRef = useRef<Socket | null>(null);
+  const isConnectingRef = useRef(false);
   const [isConnected, setIsConnected] = useState(false);
   const [latestReading, setLatestReading] = useState<WebSocketReadingUpdate | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const subscribeToSensorsRef = useRef<string[]>(subscribeToSensors);
+
+  // Actualizar referencia cuando cambian los sensores
+  useEffect(() => {
+    subscribeToSensorsRef.current = subscribeToSensors;
+  }, [subscribeToSensors]);
 
   /**
    * Conectar al servidor WebSocket
    */
   const connect = useCallback(() => {
-    if (socketRef.current?.connected) {
+    // Prevenir múltiples conexiones simultáneas
+    if (socketRef.current?.connected || isConnectingRef.current) {
       return;
     }
 
+    isConnectingRef.current = true;
+
     try {
+      // Si ya existe un socket, desconectarlo primero
+      if (socketRef.current) {
+        socketRef.current.removeAllListeners();
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+
       const socket = io(serverUrl, {
         reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        reconnectionAttempts: 5,
+        reconnectionDelay: 2000, // Aumentado para evitar bucles
+        reconnectionDelayMax: 10000,
+        reconnectionAttempts: 3, // Reducido para evitar bucles infinitos
         transports: ["websocket", "polling"],
+        timeout: 5000,
       });
 
       socket.on("connect", () => {
         console.log("✓ WebSocket connected:", socket.id);
         setIsConnected(true);
         setConnectionError(null);
+        isConnectingRef.current = false;
 
         // Suscribirse a sensores después de conectar
-        subscribeToSensors.forEach((sensorId) => {
+        subscribeToSensorsRef.current.forEach((sensorId) => {
           socket.emit("subscribe:sensor", sensorId);
         });
       });
 
-      socket.on("disconnect", () => {
-        console.log("✗ WebSocket disconnected");
+      socket.on("disconnect", (reason) => {
+        console.log("✗ WebSocket disconnected:", reason);
         setIsConnected(false);
+        isConnectingRef.current = false;
+        
+        // No reconectar automáticamente si fue desconexión manual
+        if (reason === "io client disconnect") {
+          socketRef.current = null;
+        }
       });
 
       socket.on("connect_error", (error: any) => {
-        console.error("WebSocket connection error:", error);
+        console.error("WebSocket connection error:", error.message);
         setConnectionError(error.message || "Connection failed");
+        isConnectingRef.current = false;
+        
+        // Deshabilitar reconexión automática después de varios intentos
+        if (socket.recovered === false) {
+          console.warn("WebSocket: Deshabilitando reconexión automática después de múltiples fallos");
+        }
       });
 
       // Evento: Actualización de lectura para sensor específico
@@ -101,8 +142,9 @@ export function useRealTimeSensorData(options: UseRealTimeSensorDataOptions = {}
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       console.error("Failed to create WebSocket:", errorMessage);
       setConnectionError(errorMessage);
+      isConnectingRef.current = false;
     }
-  }, [serverUrl, subscribeToSensors]);
+  }, [serverUrl]); // Solo serverUrl como dependencia
 
   /**
    * Desconectar
@@ -146,19 +188,27 @@ export function useRealTimeSensorData(options: UseRealTimeSensorDataOptions = {}
     }
   }, []);
 
-  // Auto-conectar al montar
+  // Auto-conectar al montar (solo una vez)
   useEffect(() => {
-    if (autoConnect) {
+    if (!autoConnect) {
+      return;
+    }
+
+    // Solo conectar si no hay una conexión existente
+    if (!socketRef.current && !isConnectingRef.current) {
       connect();
     }
 
     return () => {
       // Limpiar conexión al desmontar
       if (socketRef.current) {
+        socketRef.current.removeAllListeners();
         socketRef.current.disconnect();
+        socketRef.current = null;
+        isConnectingRef.current = false;
       }
     };
-  }, [autoConnect, connect]);
+  }, []); // Solo ejecutar una vez al montar
 
   return {
     isConnected,

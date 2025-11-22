@@ -41,10 +41,20 @@ export function useSensorData() {
     autoConnect: true,
   });
 
+  // Flag para prevenir múltiples llamadas simultáneas
+  const isLoadingRef = useRef(false);
+
   /**
    * Cargar datos del backend
+   * Memoizado para evitar recreaciones innecesarias
    */
   const cargarDatos = useCallback(async () => {
+    // Prevenir múltiples llamadas simultáneas
+    if (isLoadingRef.current) {
+      return;
+    }
+    
+    isLoadingRef.current = true;
     try {
       // Cargar sensores y lecturas en paralelo
       let sensores: Sensor[] = [];
@@ -69,16 +79,30 @@ export function useSensorData() {
 
       if (!isMountedRef.current) return;
 
-      // Si no hay sensores, usar un array vacío y no continuar
+      // Si no hay sensores, crear uno por defecto para evitar que se quede cargando
       if (!sensores || sensores.length === 0) {
+        // Crear un sensor por defecto si no hay ninguno
+        const sensorDefault: Sensor = {
+          id: "SENSOR_001",
+          nombre: "Sensor Principal",
+          descripcion: "Esperando datos del sensor",
+          ubicacion: {
+            latitud: -34.6037,
+            longitud: -58.3816,
+            zona: "Buenos Aires",
+          },
+          tipo: "HÍBRIDO",
+          estado: "ACTIVO",
+        };
+        
         setState({
-          sensores: [],
+          sensores: [sensorDefault],
           lecturas: lecturas || [],
           alertas: [],
           estadisticas: [],
           loading: false,
           ultimaActualizacion: new Date(),
-          error: error || "No hay sensores configurados",
+          error: error || "No hay datos de sensores aún. El sistema está esperando datos del TTGO.",
         });
         return;
       }
@@ -118,11 +142,13 @@ export function useSensorData() {
         setState((prev) => ({
           ...prev,
           loading: false,
-          error: "Error cargando datos del servidor",
+          error: `Error cargando datos: ${error instanceof Error ? error.message : "Error desconocido"}`,
         }));
       }
+    } finally {
+      isLoadingRef.current = false;
     }
-  }, []);
+  }, []); // Sin dependencias para evitar bucles
 
   /**
    * Efecto: procesar actualizaciones en tiempo real desde WebSocket
@@ -131,18 +157,33 @@ export function useSensorData() {
     if (!latestReading || !isMountedRef.current) return;
 
     setState((prev) => {
-      // Convertir lectura WebSocket a formato Lectura
-      const newReading: Lectura = {
-        id: latestReading.reading_id,
-        sensorId: latestReading.data.sensor_id,
-        timestamp: new Date(latestReading.received_at),
-        nivelAgua: latestReading.data.water_level_cm,
-        lluvia: latestReading.data.rain_accumulated_mm,
-        caudal: latestReading.data.flow_rate_lmin,
-        temperatura: latestReading.data.temperature_c,
-        humedad: latestReading.data.humidity_percent,
-        bateria: latestReading.data.battery_percent,
-      };
+      // Importar función de mapeo
+      const { mapearTTGOALectura } = require("@/lib/data-mapper");
+      
+      // Convertir lectura WebSocket a formato Lectura usando el mapeo
+      const newReading = mapearTTGOALectura(
+        {
+          sensor_id: latestReading.data.sensor_id,
+          gateway_id: latestReading.data.gateway_id,
+          timestamp: latestReading.received_at,
+          temperatura_c: latestReading.data.temperatura_c,
+          humedad_pct: latestReading.data.humedad_pct,
+          caudal_l_s: latestReading.data.caudal_l_s,
+          lluvia_mm: latestReading.data.lluvia_mm,
+          nivel_m: latestReading.data.nivel_m,
+          // Formato legacy (compatibilidad)
+          temperature_c: latestReading.data.temperature_c,
+          humidity_percent: latestReading.data.humidity_percent,
+          flow_rate_lmin: latestReading.data.flow_rate_lmin,
+          rain_accumulated_mm: latestReading.data.rain_accumulated_mm,
+          water_level_cm: latestReading.data.water_level_cm,
+          rssi: latestReading.data.rssi,
+          snr: latestReading.data.snr,
+          signal_quality: latestReading.data.signal_quality,
+          battery_percent: latestReading.data.battery_percent,
+        },
+        latestReading.reading_id
+      );
 
       // Actualizar lecturas (agregar la nueva y limitar a últimas 500)
       const lecturas = [newReading, ...prev.lecturas].slice(0, 500);
@@ -211,27 +252,38 @@ export function useSensorData() {
     // Timeout de seguridad para que nunca se quede en loading
     loadingTimeoutRef = setTimeout(() => {
       if (isMountedRef.current) {
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: prev.error || "Timeout cargando datos",
-        }));
+        setState((prev) => {
+          if (prev.loading) {
+            return {
+              ...prev,
+              loading: false,
+              error: prev.error || "Timeout cargando datos. Verifica que el backend esté corriendo en http://localhost:3001",
+            };
+          }
+          return prev;
+        });
       }
     }, LOADING_TIMEOUT);
 
-    // Configurar polling
-    pollingRef.current = setInterval(cargarDatos, POLLING_INTERVAL);
+    // Configurar polling (solo una vez)
+    if (!pollingRef.current) {
+      pollingRef.current = setInterval(() => {
+        if (isMountedRef.current) {
+          cargarDatos();
+        }
+      }, POLLING_INTERVAL);
+    }
 
     return () => {
-      isMountedRef.current = false;
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
+        pollingRef.current = undefined;
       }
       if (loadingTimeoutRef) {
         clearTimeout(loadingTimeoutRef);
       }
     };
-  }, [cargarDatos]);
+  }, []); // Solo ejecutar una vez al montar
 
   /**
    * Obtener sensor específico

@@ -5,7 +5,8 @@
 
 import { Lectura, Sensor, Alerta, EstadisticasSensor, ApiResponse } from "@/src/types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
+// Backend API URL - apunta al backend Express en puerto 3001
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 const FETCH_TIMEOUT = 10000; // 10 segundos
 
 /**
@@ -29,22 +30,37 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout 
 }
 
 /**
- * Obtener todas las lecturas de sensores
+ * Obtener todas las lecturas de sensores desde el nuevo backend
+ * Versión simplificada para evitar bucles
  */
 export async function obtenerLecturas(): Promise<Lectura[]> {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/sensores`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-    });
+    const { mapearBackendALectura } = await import("@/lib/data-mapper");
+    
+    // Solo obtener lecturas de SENSOR_001 para evitar múltiples peticiones
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/data/history/SENSOR_001?hours=24&limit=50`,
+      {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      },
+      5000 // Timeout más corto
+    );
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      console.warn(`API error al obtener lecturas: ${response.status}`);
+      return [];
     }
 
-    const data: ApiResponse<Lectura[]> = await response.json();
-    return data.data || [];
+    const data = await response.json();
+    
+    // Mapear datos del backend al formato Lectura
+    if (data.ok && data.data && Array.isArray(data.data)) {
+      return data.data.map((item: any) => mapearBackendALectura(item));
+    }
+    
+    return [];
   } catch (error) {
     console.error("Error al obtener lecturas:", error);
     return [];
@@ -97,26 +113,153 @@ export async function registrarLectura(lectura: Lectura): Promise<Lectura | null
 }
 
 /**
- * Obtener sensores configurados desde API
+ * Obtener sensores configurados desde el nuevo backend
+ * Versión simplificada que evita bucles infinitos
  */
 export async function obtenerSensores(): Promise<Sensor[]> {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/sensores/configuracion`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-    });
+    const { mapearBackendALectura } = await import("@/lib/data-mapper");
+    const sensores: Sensor[] = [];
 
-    if (!response.ok) {
-      console.warn(`API error: ${response.status}`);
-      return [];
+    // Intentar obtener gateways primero (sin hacer múltiples peticiones)
+    try {
+      const gatewaysResponse = await fetchWithTimeout(`${API_BASE_URL}/data/gateways`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      }, 5000); // Timeout más corto
+
+      if (gatewaysResponse.ok) {
+        const gatewaysData = await gatewaysResponse.json();
+        
+        if (gatewaysData.ok && gatewaysData.gateways && gatewaysData.gateways.length > 0) {
+          // Solo usar el primer gateway para evitar múltiples peticiones
+          const gateway = gatewaysData.gateways[0];
+          
+          // Intentar obtener una lectura reciente del gateway (solo una petición)
+          try {
+            const gatewayResponse = await fetchWithTimeout(
+              `${API_BASE_URL}/data/gateway/${gateway.gateway_id}?limit=10`,
+              {
+                method: "GET",
+                headers: { "Content-Type": "application/json" },
+                cache: "no-store",
+              },
+              5000
+            );
+
+            if (gatewayResponse.ok) {
+              const gatewayData = await gatewayResponse.json();
+              
+              if (gatewayData.ok && gatewayData.data && Array.isArray(gatewayData.data)) {
+                // Agrupar por sensor_id (solo de las lecturas que ya tenemos)
+                const sensorMap = new Map<string, any>();
+                
+                gatewayData.data.forEach((reading: any) => {
+                  const sensorId = reading.metadata?.sensor_id || reading.sensor_id;
+                  if (sensorId && !sensorMap.has(sensorId)) {
+                    sensorMap.set(sensorId, reading);
+                  }
+                });
+
+                // Crear sensores desde las lecturas encontradas
+                sensorMap.forEach((reading, sensorId) => {
+                  const lectura = mapearBackendALectura(reading);
+                  
+                  sensores.push({
+                    id: sensorId,
+                    nombre: `Sensor ${sensorId}`,
+                    descripcion: `Sensor conectado al gateway ${gateway.gateway_id}`,
+                    ubicacion: {
+                      latitud: gateway.location?.lat || -34.6037,
+                      longitud: gateway.location?.lng || -58.3816,
+                      zona: gateway.name || "Zona desconocida",
+                    },
+                    tipo: "HÍBRIDO",
+                    estado: "ACTIVO",
+                    ultimaLectura: lectura,
+                    ultimaActualizacion: new Date(reading.received_at || reading.timestamp || Date.now()),
+                  });
+                });
+              }
+            }
+          } catch (err) {
+            console.warn("Error al obtener datos del gateway:", err);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Error al obtener gateways:", err);
     }
 
-    const data: ApiResponse<Sensor[]> = await response.json();
-    return data.data || [];
+    // Si no hay sensores, crear uno por defecto basado en SENSOR_001 (solo una petición)
+    if (sensores.length === 0) {
+      try {
+        const defaultResponse = await fetchWithTimeout(
+          `${API_BASE_URL}/data/status/SENSOR_001`,
+          {
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+          },
+          5000
+        );
+
+        if (defaultResponse.ok) {
+          const defaultData = await defaultResponse.json();
+          if (defaultData.ok && defaultData.data) {
+            const lectura = mapearBackendALectura(defaultData.data);
+            
+            sensores.push({
+              id: "SENSOR_001",
+              nombre: "Sensor Principal",
+              descripcion: "Sensor de monitoreo de inundaciones",
+              ubicacion: {
+                latitud: -34.6037,
+                longitud: -58.3816,
+                zona: "Buenos Aires",
+              },
+              tipo: "HÍBRIDO",
+              estado: "ACTIVO",
+              ultimaLectura: lectura,
+              ultimaActualizacion: new Date(),
+            });
+          }
+        }
+      } catch (err) {
+        // Si falla, crear un sensor vacío para que el frontend no se quede cargando
+        console.warn("No se pudo obtener sensor por defecto, creando sensor vacío:", err);
+        sensores.push({
+          id: "SENSOR_001",
+          nombre: "Sensor Principal",
+          descripcion: "Esperando datos del sensor",
+          ubicacion: {
+            latitud: -34.6037,
+            longitud: -58.3816,
+            zona: "Buenos Aires",
+          },
+          tipo: "HÍBRIDO",
+          estado: "ACTIVO",
+        });
+      }
+    }
+
+    return sensores;
   } catch (error) {
     console.error("Error al obtener sensores:", error);
-    return [];
+    // Retornar un sensor vacío para evitar que el frontend se quede cargando
+    return [{
+      id: "SENSOR_001",
+      nombre: "Sensor Principal",
+      descripcion: "Error al cargar datos",
+      ubicacion: {
+        latitud: -34.6037,
+        longitud: -58.3816,
+        zona: "Buenos Aires",
+      },
+      tipo: "HÍBRIDO",
+      estado: "INACTIVO",
+    }];
   }
 }
 
@@ -146,26 +289,26 @@ export function calcularEstadisticas(
 
   const lluvia = {
     promedio:
-      lecturasFiltradas.reduce((sum, l) => sum + l.lluvia_ao, 0) /
+      lecturasFiltradas.reduce((sum, l) => sum + (l.lluvia_ao || l.rain_accumulated_mm || 0), 0) /
         lecturasFiltradas.length || 0,
-    maximo: Math.max(...lecturasFiltradas.map((l) => l.lluvia_ao), 0),
-    minimo: Math.min(...lecturasFiltradas.map((l) => l.lluvia_ao), 0),
+    maximo: Math.max(...lecturasFiltradas.map((l) => l.lluvia_ao || l.rain_accumulated_mm || 0), 0),
+    minimo: Math.min(...lecturasFiltradas.map((l) => l.lluvia_ao || l.rain_accumulated_mm || 0), 0),
   };
 
   const temperatura = {
     promedio:
-      lecturasFiltradas.reduce((sum, l) => sum + l.temperatura_c, 0) /
+      lecturasFiltradas.reduce((sum, l) => sum + (l.temperatura_c || l.temperature_c || 0), 0) /
         lecturasFiltradas.length || 0,
-    maximo: Math.max(...lecturasFiltradas.map((l) => l.temperatura_c), 0),
-    minimo: Math.min(...lecturasFiltradas.map((l) => l.temperatura_c), 0),
+    maximo: Math.max(...lecturasFiltradas.map((l) => l.temperatura_c || l.temperature_c || 0), 0),
+    minimo: Math.min(...lecturasFiltradas.map((l) => l.temperatura_c || l.temperature_c || 0), 0),
   };
 
   const flujo = {
     promedio:
-      lecturasFiltradas.reduce((sum, l) => sum + l.flujo_lmin, 0) /
+      lecturasFiltradas.reduce((sum, l) => sum + (l.flujo_lmin || l.flow_rate_lmin || 0), 0) /
         lecturasFiltradas.length || 0,
-    maximo: Math.max(...lecturasFiltradas.map((l) => l.flujo_lmin), 0),
-    minimo: Math.min(...lecturasFiltradas.map((l) => l.flujo_lmin), 0),
+    maximo: Math.max(...lecturasFiltradas.map((l) => l.flujo_lmin || l.flow_rate_lmin || 0), 0),
+    minimo: Math.min(...lecturasFiltradas.map((l) => l.flujo_lmin || l.flow_rate_lmin || 0), 0),
   };
 
   const nivelesArray = lecturasFiltradas.map((l) => l.nivel_flotador);
