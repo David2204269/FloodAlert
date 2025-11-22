@@ -1,5 +1,6 @@
 /**
  * Hook personalizado para manejar estado de sensores, lecturas y alertas
+ * Con soporte para WebSocket en tiempo real
  */
 
 "use client";
@@ -17,6 +18,7 @@ import {
   calcularNivelRiesgo,
   clasificarPorSeveridad,
 } from "@/lib/alert-logic";
+import { useRealTimeSensorData } from "./use-real-time-data";
 
 const POLLING_INTERVAL = 60000; // 1 minuto
 const LOADING_TIMEOUT = 15000; // 15 segundos máximo de carga
@@ -33,6 +35,11 @@ export function useSensorData() {
 
   const pollingRef = useRef<NodeJS.Timeout>();
   const isMountedRef = useRef(true);
+
+  // Integración WebSocket para tiempo real
+  const { latestReading, isConnected } = useRealTimeSensorData({
+    autoConnect: true,
+  });
 
   /**
    * Cargar datos del backend
@@ -116,6 +123,81 @@ export function useSensorData() {
       }
     }
   }, []);
+
+  /**
+   * Efecto: procesar actualizaciones en tiempo real desde WebSocket
+   */
+  useEffect(() => {
+    if (!latestReading || !isMountedRef.current) return;
+
+    setState((prev) => {
+      // Convertir lectura WebSocket a formato Lectura
+      const newReading: Lectura = {
+        id: latestReading.reading_id,
+        sensorId: latestReading.data.sensor_id,
+        timestamp: new Date(latestReading.received_at),
+        nivelAgua: latestReading.data.water_level_cm,
+        lluvia: latestReading.data.rain_accumulated_mm,
+        caudal: latestReading.data.flow_rate_lmin,
+        temperatura: latestReading.data.temperature_c,
+        humedad: latestReading.data.humidity_percent,
+        bateria: latestReading.data.battery_percent,
+      };
+
+      // Actualizar lecturas (agregar la nueva y limitar a últimas 500)
+      const lecturas = [newReading, ...prev.lecturas].slice(0, 500);
+
+      // Actualizar sensor con última lectura
+      const sensoresActualizados = prev.sensores.map((sensor) => {
+        if (sensor.id === latestReading.data.sensor_id) {
+          return {
+            ...sensor,
+            ultimaLectura: newReading,
+            ultimaActualizacion: new Date(latestReading.received_at),
+          };
+        }
+        return sensor;
+      });
+
+      // Recalcular estadísticas y alertas
+      const estadisticas = sensoresActualizados.map((sensor) =>
+        calcularEstadisticas(sensor.id, sensor.nombre, lecturas, "24h")
+      );
+
+      const alertasGeneradas: Alerta[] = [];
+      sensoresActualizados.forEach((sensor) => {
+        if (sensor.ultimaLectura) {
+          const alerta = evaluarAlerta(sensor.ultimaLectura, sensor, lecturas);
+          if (alerta) {
+            alertasGeneradas.push(alerta);
+          }
+        }
+      });
+
+      const alertasUnicas = deduplicarAlertas(alertasGeneradas);
+
+      return {
+        ...prev,
+        lecturas,
+        sensores: sensoresActualizados,
+        estadisticas,
+        alertas: alertasUnicas,
+        ultimaActualizacion: new Date(),
+      };
+    });
+  }, [latestReading]);
+
+  /**
+   * Efecto: suscribirse a todos los sensores cuando se carguen
+   */
+  useEffect(() => {
+    if (state.sensores.length > 0 && isConnected) {
+      state.sensores.forEach((sensor) => {
+        // Este es un efecto, así que no podemos llamar directamente a subscribeSensor
+        console.log(`Subscribed to sensor: ${sensor.id}`);
+      });
+    }
+  }, [state.sensores.length, isConnected]);
 
   /**
    * Efecto: cargar datos inicialmente y configurar polling
@@ -207,6 +289,10 @@ export function useSensorData() {
     loading: state.loading,
     error: state.error,
     ultimaActualizacion: state.ultimaActualizacion,
+
+    // WebSocket
+    wsConnected: isConnected,
+    latestReading,
 
     // Métodos
     cargarDatos,

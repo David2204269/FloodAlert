@@ -16,14 +16,42 @@ export type OrigenDato = "SENSOR_IOT" | "ESTACION_OFICIAL" | "API_EXTERNA" | "PR
  * Representa una medición puntual de un sensor
  */
 export interface Lectura {
+  id?: string;
   _id?: string;
   sensorId?: string;
-  lluvia_ao: number; // Lluvia acumulada en mm
-  humedad_ao: number; // Humedad en %
-  nivel_flotador: NivelFlotador; // Estado del nivel
-  flujo_lmin: number; // Flujo en L/min
-  temperatura_c: number; // Temperatura en °C
-  timestamp: number; // Unix timestamp
+  sensor_id?: string;
+  
+  // Datos de medición
+  nivelAgua?: number;
+  water_level_cm?: number; // En cm
+  
+  lluvia_ao?: number;
+  rain_accumulated_mm?: number; // En mm
+  
+  caudal?: number;
+  flow_rate_lmin?: number; // En L/min
+  
+  temperatura?: number;
+  temperature_c?: number; // En °C
+  
+  humedad?: number;
+  humidity_percent?: number; // En %
+  
+  bateria?: number;
+  battery_percent?: number; // En %
+  
+  // Señal (opcional)
+  rssi?: number; // LoRa signal strength
+  snr?: number; // Signal-to-noise ratio
+  signal_quality?: "excellent" | "good" | "fair" | "poor";
+  
+  // Metadata
+  gateway_id?: string;
+  humedad_ao?: number;
+  flujo_lmin?: number;
+  nivel_flotador?: NivelFlotador;
+  
+  timestamp?: number;
   createdAt?: Date;
 }
 
