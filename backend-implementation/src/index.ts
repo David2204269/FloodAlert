@@ -6,6 +6,9 @@
  * TTGO Sensor (LoRa) → TTGO Gateway (LoRa + WiFi) → HTTP POST → This Backend
  */
 
+// Load environment variables first
+import 'dotenv/config';
+
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -27,9 +30,16 @@ import { WebSocketService } from './services/websocket.service.js';
 // Configuration
 const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
+// MongoDB Atlas connection string
+// Formato: mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/<database>?retryWrites=true&w=majority
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/flood_alert';
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+
+// Validar que MONGODB_URI esté configurado si no es desarrollo local
+if (!MONGODB_URI || (!MONGODB_URI.includes('mongodb+srv://') && !MONGODB_URI.includes('mongodb://localhost'))) {
+  console.warn('⚠️  MONGODB_URI no está configurado correctamente. Usando conexión local por defecto.');
+}
 
 // Logger setup
 const logger = pino({ level: LOG_LEVEL });
@@ -46,23 +56,37 @@ let wsService: WebSocketService;
  */
 async function connectMongoDB(): Promise<void> {
   try {
+    logger.info(`Conectando a MongoDB: ${MONGODB_URI.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@')}`);
+    
     mongoClient = new MongoClient(MONGODB_URI, {
       maxPoolSize: 10,
       minPoolSize: 2,
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 10000, // Aumentado para Atlas
+      connectTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+      // Opciones específicas para MongoDB Atlas
+      retryWrites: true,
+      w: 'majority',
     });
 
     await mongoClient.connect();
-    db = mongoClient.db();
+    
+    // Obtener el nombre de la base de datos desde la URI o usar 'flood_alert' por defecto
+    const dbName = MONGODB_URI.split('/').pop()?.split('?')[0] || 'flood_alert';
+    db = mongoClient.db(dbName);
     
     // Verify connection
     await db.admin().ping();
-    logger.info('✓ Connected to MongoDB');
+    logger.info(`✓ Connected to MongoDB Atlas - Database: ${dbName}`);
 
     // Create indexes
     await createIndexes(db);
-  } catch (error) {
-    logger.error('✗ MongoDB connection failed:', error);
+  } catch (error: any) {
+    logger.error('✗ MongoDB connection failed:', error.message);
+    logger.error('Verifica que:');
+    logger.error('  1. MONGODB_URI esté configurado en el archivo .env');
+    logger.error('  2. La IP de tu servidor esté en la whitelist de MongoDB Atlas');
+    logger.error('  3. Las credenciales sean correctas');
     process.exit(1);
   }
 }

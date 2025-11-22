@@ -91,14 +91,26 @@ export class GatewayDataService {
         return { success: false, error: 'Duplicate reading detected' };
       }
 
+      // Convertir timestamp a Date si es número (segundos o milisegundos)
+      let timestampDate: Date;
+      if (typeof reading.timestamp === 'number') {
+        // Si el timestamp es menor que un año en milisegundos, asumir que está en segundos
+        timestampDate = reading.timestamp < 10000000000 
+          ? new Date(reading.timestamp * 1000) 
+          : new Date(reading.timestamp);
+      } else {
+        timestampDate = reading.timestamp;
+      }
+
       // Almacenar en MongoDB
       const result = await this.db.collection('sensor_readings').insertOne({
         metadata: {
           sensor_id: reading.sensor_id,
           gateway_id: reading.gateway_id,
-          timestamp: reading.timestamp,
+          timestamp: timestampDate,
         },
         ...reading,
+        timestamp: timestampDate, // Sobrescribir timestamp con Date
         received_at: new Date(),
         processing_timestamp: new Date(),
       });
