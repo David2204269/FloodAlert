@@ -1,22 +1,21 @@
 /**
  * API REST - GET, POST, DELETE en /api/sensores
  * 
- * POST: Recibe datos del sensor TTGO, valida e inserta en MongoDB
+ * POST: Recibe datos del sensor TTGO/Arduino, valida e inserta en Supabase
  * GET: Retorna todas las lecturas ordenadas por fecha DESC
- * DELETE: Elimina todas las lecturas de la colección
+ * DELETE: Elimina todas las lecturas de la tabla
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import clientPromise from '@/src/lib/mongodb';
+import { supabase } from '@/src/lib/supabase';
 import { Lectura } from '@/src/models/Lectura';
 import { validateSensorData, ValidationError } from '@/src/utils/validateSensorData';
 
-const DB_NAME = 'flood_alert';
-const COLLECTION_NAME = 'lecturas';
+const TABLE_NAME = 'lecturas';
 
 /**
  * POST - Insertar nueva lectura de sensor
- * Recibe JSON del dispositivo TTGO y lo guarda en MongoDB
+ * Recibe JSON del dispositivo TTGO/Arduino y lo guarda en Supabase
  */
 export async function POST(request: NextRequest) {
   try {
@@ -25,26 +24,25 @@ export async function POST(request: NextRequest) {
     // Validar datos
     const validatedData = validateSensorData(body);
 
-    // Conectar a MongoDB
-    const client = await clientPromise;
-    const db = client.db(DB_NAME);
-    const collection = db.collection<Lectura>(COLLECTION_NAME);
+    // Insertar en Supabase (created_at se genera automáticamente)
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .insert([validatedData])
+      .select()
+      .single();
 
-    // Insertar documento con timestamp automático
-    const lecturaDocument: Lectura = {
-      ...validatedData,
-      createdAt: new Date(),
-    };
-
-    const result = await collection.insertOne(lecturaDocument);
+    if (error) {
+      console.error('Error al insertar en Supabase:', error);
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json(
       {
         ok: true,
-        data: {
-          _id: result.insertedId,
-          ...lecturaDocument,
-        },
+        data,
       },
       { status: 201 }
     );
@@ -70,19 +68,22 @@ export async function POST(request: NextRequest) {
  */
 export async function GET() {
   try {
-    const client = await clientPromise;
-    const db = client.db(DB_NAME);
-    const collection = db.collection<Lectura>(COLLECTION_NAME);
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    // Buscar todas las lecturas ordenadas por createdAt DESC
-    const lecturas = await collection
-      .find({})
-      .sort({ createdAt: -1 })
-      .toArray();
+    if (error) {
+      console.error('Error al consultar Supabase:', error);
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
-      data: lecturas,
+      data: data || [],
     });
   } catch (error) {
     console.error('Error en GET /api/sensores:', error);
@@ -95,20 +96,27 @@ export async function GET() {
 
 /**
  * DELETE - Eliminar todas las lecturas
- * Borra todos los documentos de la colección lecturas
+ * Borra todos los registros de la tabla lecturas
  */
 export async function DELETE() {
   try {
-    const client = await clientPromise;
-    const db = client.db(DB_NAME);
-    const collection = db.collection<Lectura>(COLLECTION_NAME);
+    const { error, count } = await supabase
+      .from(TABLE_NAME)
+      .delete()
+      .neq('id', 0); // Elimina todos los registros (condición siempre verdadera)
 
-    const result = await collection.deleteMany({});
+    if (error) {
+      console.error('Error al eliminar en Supabase:', error);
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
       data: {
-        deletedCount: result.deletedCount,
+        deletedCount: count || 0,
       },
     });
   } catch (error) {

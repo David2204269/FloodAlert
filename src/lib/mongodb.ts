@@ -7,7 +7,7 @@
 import { MongoClient } from "mongodb";
 
 // URI de conexión: preferencia a MONGODB_URI de Vercel, fallback a conexión local
-const uri = process.env.MONGODB_URI || "mongodb+srv://FloodAlertDB:Admin123@cluster0.xmb1cvz.mongodb.net/?appName=Cluster0";
+const uri = process.env.MONGODB_URI;
 
 if (!uri) {
   throw new Error('MONGODB_URI environment variable not defined');

@@ -24,21 +24,6 @@ interface SensorData {
   lastUpdate: string
 }
 
-const mockSensorData: SensorData[] = [
-  {
-    id: "1",
-    name: "Río Principal - Zona de Riesgo",
-    location: { lat: 7.355329655761653, lng: -73.9032701646408 },
-    waterLevel: 45,
-    flowRate: 120,
-    soilMoisture: 65,
-    temperature: 24.5,
-    precipitation: 12.3,
-    riskLevel: "normal",
-    lastUpdate: "2 min ago",
-  },
-]
-
 const CheckCircleIcon = () => (
   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
     <path
@@ -215,10 +200,17 @@ const SensorCard = ({
 }
 
 export function FloodDashboard() {
-  const [sensors, setSensors] = useState<SensorData[]>(mockSensorData)
+  const [sensors, setSensors] = useState<SensorData[]>([])
   const [selectedSensor, setSelectedSensor] = useState<string | null>(null)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
-  const [alerts, setAlerts] = useState([
+  const [isLoading, setIsLoading] = useState(true)
+  const [alerts, setAlerts] = useState<Array<{
+    id: string
+    type: "normal" | "alert" | "danger"
+    message: string
+    timestamp: string
+    location: string
+  }>>([
     {
       id: "1",
       type: "danger",
@@ -239,6 +231,62 @@ export function FloodDashboard() {
 
   const { sendNotification, permission } = useNotifications()
   const previousAlertsRef = useRef<typeof alerts>([])
+
+  // Función para obtener datos de la API
+  const fetchSensorData = async () => {
+    try {
+      const response = await fetch('/api/sensores')
+      const result = await response.json()
+      
+      if (result.ok && result.data) {
+        // Transformar los datos de Supabase al formato del dashboard
+        const transformedData: SensorData[] = result.data.map((lectura: any, index: number) => {
+          const temp = parseFloat(lectura.temperatura_c) || 0
+          const nivel = lectura.nivel_m || 0
+          const caudal = lectura.caudal_l_s || 0
+          
+          // Determinar nivel de riesgo basado en los valores
+          let riskLevel: "normal" | "alert" | "danger" = "normal"
+          if (nivel > 5 || caudal > 150) {
+            riskLevel = "danger"
+          } else if (nivel > 3 || caudal > 100) {
+            riskLevel = "alert"
+          }
+          
+          return {
+            id: lectura.id?.toString() || `sensor-${index}`,
+            name: `Sensor ${lectura.seq || index + 1}`,
+            location: { lat: 7.355329655761653, lng: -73.9032701646408 }, // Ubicación por defecto
+            waterLevel: nivel * 100, // Convertir metros a cm
+            flowRate: caudal,
+            soilMoisture: lectura.humedad_pct || 0,
+            temperature: temp,
+            precipitation: lectura.lluvia_mm || 0,
+            riskLevel,
+            lastUpdate: lectura.created_at 
+              ? new Date(lectura.created_at).toLocaleString('es-ES')
+              : 'Hace un momento'
+          }
+        })
+        
+        setSensors(transformedData)
+      }
+    } catch (error) {
+      console.error('Error al obtener datos de sensores:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Cargar datos al montar el componente
+  useEffect(() => {
+    fetchSensorData()
+    
+    // Actualizar cada 10 segundos
+    const interval = setInterval(fetchSensorData, 10000)
+    
+    return () => clearInterval(interval)
+  }, [])
 
   const handleNotificationClick = () => {
     setShowNotifications(!showNotifications)
@@ -272,7 +320,6 @@ export function FloodDashboard() {
           body: alert.message,
           tag: `alert-${alert.id}`,
           requireInteraction: isDanger,
-          vibrate: isDanger ? [300, 100, 300, 100, 300] : [200, 100, 200],
         }
       )
     })
@@ -466,19 +513,34 @@ export function FloodDashboard() {
             </div>
           </div>
           <div>
-            <h2 className="text-base md:text-lg font-bold mb-3 md:mb-4 text-slate-800">Sensores Activos</h2>
+            <h2 className="text-base md:text-lg font-bold mb-3 md:mb-4 text-slate-800">Último Registro</h2>
             <div>
-              {sensors.map((sensor) => (
+              {/* Mostrar solo el primer elemento (más reciente) ya que la API ordena por created_at DESC */}
+              {sensors.length > 0 && (
                 <SensorCard
-                  key={sensor.id}
-                  sensor={sensor}
-                  isSelected={selectedSensor === sensor.id}
+                  key={sensors[0].id}
+                  sensor={sensors[0]}
+                  isSelected={selectedSensor === sensors[0].id}
                   onClick={() => {
-                    handleSensorSelect(sensor.id)
+                    handleSensorSelect(sensors[0].id)
                     setIsMobileSidebarOpen(false)
                   }}
                 />
-              ))}
+              )}
+              {sensors.length === 0 && !isLoading && (
+                <Card className="bg-white/80 border-slate-200">
+                  <CardContent className="p-4 text-center text-slate-500">
+                    No hay datos disponibles
+                  </CardContent>
+                </Card>
+              )}
+              {isLoading && (
+                <Card className="bg-white/80 border-slate-200">
+                  <CardContent className="p-4 text-center text-slate-500">
+                    Cargando datos en tiempo real...
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         </aside>

@@ -1,1 +1,9 @@
-{"timestamp":112,"temperatura_c":"26.12","humedad_pct":0,"caudal_l_s":0,"lluvia_mm":0,"nivel_m":0,"seq":549}
+{
+  "timestamp": 274,
+  "temperatura_c": "26.12",
+  "humedad_pct": 51,
+  "caudal_l_s": 0,
+  "lluvia_mm": 0,
+  "nivel_m": 3,
+  "seq": 160
+}

@@ -7,12 +7,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { ObjectId } from 'mongodb';
-import clientPromise from '@/src/lib/mongodb';
+import { supabase } from '@/src/lib/supabase';
 import { Lectura } from '@/src/models/Lectura';
 
-const DB_NAME = 'flood_alert';
-const COLLECTION_NAME = 'lecturas';
+const TABLE_NAME = 'lecturas';
 
 /**
  * GET - Obtener una lectura por ID
@@ -25,23 +23,22 @@ export async function GET(
   try {
     const { id } = params;
 
-    // Validar que sea un ObjectId válido
-    if (!ObjectId.isValid(id)) {
+    // Validar que sea un número válido
+    const idNum = parseInt(id, 10);
+    if (isNaN(idNum)) {
       return NextResponse.json(
         { ok: false, error: 'ID inválido' },
         { status: 400 }
       );
     }
 
-    const client = await clientPromise;
-    const db = client.db(DB_NAME);
-    const collection = db.collection<Lectura>(COLLECTION_NAME);
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .eq('id', idNum)
+      .single();
 
-    const lectura = await collection.findOne({
-      _id: new ObjectId(id),
-    });
-
-    if (!lectura) {
+    if (error || !data) {
       return NextResponse.json(
         { ok: false, error: 'Lectura no encontrada' },
         { status: 404 }
@@ -50,7 +47,7 @@ export async function GET(
 
     return NextResponse.json({
       ok: true,
-      data: lectura,
+      data,
     });
   } catch (error) {
     console.error('Error en GET /api/sensores/[id]:', error);
@@ -72,8 +69,9 @@ export async function PATCH(
   try {
     const { id } = params;
 
-    // Validar que sea un ObjectId válido
-    if (!ObjectId.isValid(id)) {
+    // Validar que sea un número válido
+    const idNum = parseInt(id, 10);
+    if (isNaN(idNum)) {
       return NextResponse.json(
         { ok: false, error: 'ID inválido' },
         { status: 400 }
@@ -90,21 +88,18 @@ export async function PATCH(
       );
     }
 
-    // No permitir actualizar _id o createdAt
-    delete body._id;
-    delete body.createdAt;
+    // No permitir actualizar id o created_at
+    delete body.id;
+    delete body.created_at;
 
-    const client = await clientPromise;
-    const db = client.db(DB_NAME);
-    const collection = db.collection<Lectura>(COLLECTION_NAME);
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .update(body)
+      .eq('id', idNum)
+      .select()
+      .single();
 
-    const result = await collection.findOneAndUpdate(
-      { _id: new ObjectId(id) },
-      { $set: body },
-      { returnDocument: 'after' }
-    );
-
-    if (!result) {
+    if (error || !data) {
       return NextResponse.json(
         { ok: false, error: 'Lectura no encontrada' },
         { status: 404 }
@@ -113,7 +108,7 @@ export async function PATCH(
 
     return NextResponse.json({
       ok: true,
-      data: result,
+      data,
     });
   } catch (error) {
     if (error instanceof SyntaxError) {
@@ -141,23 +136,21 @@ export async function DELETE(
   try {
     const { id } = params;
 
-    // Validar que sea un ObjectId válido
-    if (!ObjectId.isValid(id)) {
+    // Validar que sea un número válido
+    const idNum = parseInt(id, 10);
+    if (isNaN(idNum)) {
       return NextResponse.json(
         { ok: false, error: 'ID inválido' },
         { status: 400 }
       );
     }
 
-    const client = await clientPromise;
-    const db = client.db(DB_NAME);
-    const collection = db.collection<Lectura>(COLLECTION_NAME);
+    const { error, count } = await supabase
+      .from(TABLE_NAME)
+      .delete()
+      .eq('id', idNum);
 
-    const result = await collection.deleteOne({
-      _id: new ObjectId(id),
-    });
-
-    if (result.deletedCount === 0) {
+    if (error || count === 0) {
       return NextResponse.json(
         { ok: false, error: 'Lectura no encontrada' },
         { status: 404 }
@@ -167,7 +160,7 @@ export async function DELETE(
     return NextResponse.json({
       ok: true,
       data: {
-        deletedCount: result.deletedCount,
+        deletedCount: count,
       },
     });
   } catch (error) {

@@ -1,19 +1,19 @@
 /**
  * Modelo de Lectura de Sensores
  * Define la interfaz y el esquema para documentos en la colección "lecturas"
+ * Estructura actualizada según datos del Arduino/TTGO
  */
 
-import { ObjectId } from "mongodb";
-
 export interface Lectura {
-  _id?: ObjectId;
-  lluvia_ao: number;
-  humedad_ao: number;
-  nivel_flotador: string;
-  flujo_lmin: number;
-  temperatura_c: number;
-  timestamp: number;      // Timestamp enviado desde TTGO (milisegundos o segundos)
-  createdAt?: Date;       // Creado automáticamente en el backend
+  id?: number;            // ID autogenerado por Supabase
+  temperatura_c: string;  // Temperatura en °C (string con decimales ej: "26.12")
+  humedad_pct: number;    // Humedad en porcentaje
+  caudal_l_s: number;     // Caudal en litros por segundo
+  lluvia_mm: number;      // Lluvia en milímetros
+  nivel_m: number;        // Nivel del agua en metros
+  seq: number;            // Número de secuencia del paquete
+  timestamp: number;      // Timestamp enviado desde TTGO (segundos)
+  created_at?: string;    // Creado automáticamente por Supabase
 }
 
-export type LecturaInput = Omit<Lectura, '_id' | 'createdAt'>;
+export type LecturaInput = Omit<Lectura, 'id' | 'created_at'>;
