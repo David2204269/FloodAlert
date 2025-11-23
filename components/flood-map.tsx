@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, memo } from "react"
 
 interface Sensor {
   id: string
@@ -9,6 +9,8 @@ interface Sensor {
   waterLevel: number
   flowRate: number
   soilMoisture: number
+  temperature: number
+  precipitation: number
   riskLevel: "normal" | "alert" | "danger"
 }
 
@@ -18,14 +20,16 @@ interface FloodMapProps {
   onSensorSelect: (sensorId: string) => void
 }
 
-export function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapProps) {
+export const FloodMap = memo(function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isScriptLoaded, setIsScriptLoaded] = useState(false)
   const mapInstanceRef = useRef<any>(null)
-  const markersRef = useRef<any[]>([])
+  const markersRef = useRef<Map<string, { marker: any; infoWindow: any }>>(new Map())
+  const initializedRef = useRef(false)
 
+  // Cargar el script de Google Maps (solo una vez)
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "AIzaSyAGBwVw8JH6eg585Q1Ig-_93dK0SGdcrDU";
 
@@ -73,9 +77,9 @@ export function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapPr
     console.log("[v0] Script tag appended to body")
   }, [])
 
+  // Inicializar el mapa solo una vez
   useEffect(() => {
-    if (!isScriptLoaded) {
-      console.log("[v0] Script not loaded yet, waiting...")
+    if (!isScriptLoaded || initializedRef.current) {
       return
     }
 
@@ -91,11 +95,9 @@ export function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapPr
       return
     }
 
-    console.log("[v0] Initializing map...")
-    console.log("[v0] mapRef.current exists:", !!mapRef.current)
+    console.log("[v0] Initializing map instance (once)...")
 
     try {
-      console.log("[v0] Creating map instance with", sensors.length, "sensors")
       const map = new window.google.maps.Map(mapRef.current, {
         center: { lat: 7.3455068294302075, lng: -73.90576254797632 },
         zoom: 12,
@@ -107,15 +109,77 @@ export function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapPr
 
       console.log("[v0] Map instance created successfully")
       mapInstanceRef.current = map
+      initializedRef.current = true
+      setIsLoading(false)
+      setError(null)
+    } catch (err) {
+      console.log("[v0] ERROR during map initialization:", err)
+      setError("Error al inicializar el mapa")
+      setIsLoading(false)
+    }
+  }, [isScriptLoaded])
 
-      markersRef.current.forEach((marker) => marker.setMap(null))
-      markersRef.current = []
+  // Actualizar marcadores cuando cambien los datos de sensores
+  useEffect(() => {
+    if (!mapInstanceRef.current || !initializedRef.current) {
+      return
+    }
 
-      const bounds = new window.google.maps.LatLngBounds()
+    const map = mapInstanceRef.current
+    console.log("[v0] Updating markers for", sensors.length, "sensors")
 
-      sensors.forEach((sensor) => {
-        const color = sensor.riskLevel === "danger" ? "#ef4444" : sensor.riskLevel === "alert" ? "#eab308" : "#22c55e"
+    // Obtener IDs actuales de sensores
+    const currentSensorIds = new Set(sensors.map(s => s.id))
 
+    // Remover marcadores de sensores que ya no existen
+    markersRef.current.forEach((markerData, sensorId) => {
+      if (!currentSensorIds.has(sensorId)) {
+        markerData.marker.setMap(null)
+        markersRef.current.delete(sensorId)
+      }
+    })
+
+    // Actualizar o crear marcadores
+    sensors.forEach((sensor) => {
+      const color = sensor.riskLevel === "danger" ? "#ef4444" : sensor.riskLevel === "alert" ? "#eab308" : "#22c55e"
+      const existingMarkerData = markersRef.current.get(sensor.id)
+
+      if (existingMarkerData) {
+        // Actualizar marcador existente
+        existingMarkerData.marker.setIcon({
+          path: window.google.maps.SymbolPath.CIRCLE,
+          fillColor: color,
+          fillOpacity: 0.9,
+          strokeColor: "#ffffff",
+          strokeWeight: 2,
+          scale: selectedSensor === sensor.id ? 12 : 10,
+        })
+
+        // Actualizar animación
+        existingMarkerData.marker.setAnimation(
+          sensor.riskLevel === "danger" ? window.google.maps.Animation.BOUNCE : null
+        )
+
+        // Actualizar contenido del InfoWindow
+        existingMarkerData.infoWindow.setContent(`
+          <div style="font-family: system-ui, sans-serif; padding: 8px; min-width: 200px;">
+            <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1e293b;">Estación</h3>
+            <div style="font-size: 14px; color: #475569; line-height: 1.6;">
+              <div style="margin: 4px 0;">💧 Nivel: <strong>${sensor.waterLevel.toFixed(1)} cm</strong></div>
+              <div style="margin: 4px 0;">🌊 Caudal: <strong>${sensor.flowRate.toFixed(0)} L/s</strong></div>
+              <div style="margin: 4px 0;">🌱 Humedad: <strong>${sensor.soilMoisture.toFixed(0)}%</strong></div>
+              <div style="margin: 4px 0;">🌡️ Temperatura: <strong>${sensor.temperature.toFixed(1)}°C</strong></div>
+              <div style="margin: 4px 0;">🌧️ Precipitación: <strong>${sensor.precipitation.toFixed(1)} mm</strong></div>
+              <div style="margin: 8px 0 0 0; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                <span style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; background: ${color}; color: white;">
+                  ${sensor.riskLevel === "danger" ? "PELIGRO" : sensor.riskLevel === "alert" ? "ALERTA" : "NORMAL"}
+                </span>
+              </div>
+            </div>
+          </div>
+        `)
+      } else {
+        // Crear nuevo marcador
         const marker = new window.google.maps.Marker({
           position: sensor.location,
           map,
@@ -128,20 +192,19 @@ export function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapPr
             strokeWeight: 2,
             scale: selectedSensor === sensor.id ? 12 : 10,
           },
-          animation: sensor.riskLevel === "danger" ? window.google.maps.Animation.BOUNCE : undefined,
+          animation: sensor.riskLevel === "danger" ? window.google.maps.Animation.BOUNCE : null,
         })
-
-        markersRef.current.push(marker)
-        bounds.extend(sensor.location)
 
         const infoWindow = new window.google.maps.InfoWindow({
           content: `
             <div style="font-family: system-ui, sans-serif; padding: 8px; min-width: 200px;">
-              <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1e293b;">${sensor.name}</h3>
+              <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1e293b;">Estación</h3>
               <div style="font-size: 14px; color: #475569; line-height: 1.6;">
                 <div style="margin: 4px 0;">💧 Nivel: <strong>${sensor.waterLevel.toFixed(1)} cm</strong></div>
                 <div style="margin: 4px 0;">🌊 Caudal: <strong>${sensor.flowRate.toFixed(0)} L/s</strong></div>
                 <div style="margin: 4px 0;">🌱 Humedad: <strong>${sensor.soilMoisture.toFixed(0)}%</strong></div>
+                <div style="margin: 4px 0;">🌡️ Temperatura: <strong>${sensor.temperature.toFixed(1)}°C</strong></div>
+                <div style="margin: 4px 0;">🌧️ Precipitación: <strong>${sensor.precipitation.toFixed(1)} mm</strong></div>
                 <div style="margin: 8px 0 0 0; padding-top: 8px; border-top: 1px solid #e2e8f0;">
                   <span style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; background: ${color}; color: white;">
                     ${sensor.riskLevel === "danger" ? "PELIGRO" : sensor.riskLevel === "alert" ? "ALERTA" : "NORMAL"}
@@ -157,26 +220,29 @@ export function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapPr
           infoWindow.open(map, marker)
         })
 
-        if (selectedSensor === sensor.id) {
-          infoWindow.open(map, marker)
-          map.setCenter({ lat: 7.3455068294302075, lng: -73.90576254797632 })
-          map.setZoom(14)
-        }
-      })
-
-      if (sensors.length > 1) {
-        map.fitBounds(bounds)
+        markersRef.current.set(sensor.id, { marker, infoWindow })
       }
+    })
 
-      console.log("[v0] Map initialized successfully with", markersRef.current.length, "markers")
-      setIsLoading(false)
-      setError(null)
-    } catch (err) {
-      console.log("[v0] ERROR during map initialization:", err)
-      setError("Error al inicializar el mapa")
-      setIsLoading(false)
+    console.log("[v0] Markers updated successfully")
+  }, [sensors, selectedSensor, onSensorSelect])
+
+  // Manejar sensor seleccionado (centrar y abrir InfoWindow)
+  useEffect(() => {
+    if (!mapInstanceRef.current || !selectedSensor) {
+      return
     }
-  }, [isScriptLoaded, sensors, selectedSensor, onSensorSelect])
+
+    const markerData = markersRef.current.get(selectedSensor)
+    if (markerData) {
+      const map = mapInstanceRef.current
+      markerData.infoWindow.open(map, markerData.marker)
+      
+      // Opcional: centrar en el sensor seleccionado
+      // map.setCenter(markerData.marker.getPosition())
+      // map.setZoom(14)
+    }
+  }, [selectedSensor])
 
   return (
     <div className="relative w-full h-[70vh]">
@@ -207,4 +273,5 @@ export function FloodMap({ sensors, selectedSensor, onSensorSelect }: FloodMapPr
       )}
     </div>
   )
-}
+
+})
