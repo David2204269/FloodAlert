@@ -204,6 +204,7 @@ export function FloodDashboard() {
   const [selectedSensor, setSelectedSensor] = useState<string | null>(null)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState("map")
   const [alerts, setAlerts] = useState<Array<{
     id: string
     type: "normal" | "alert" | "danger"
@@ -545,7 +546,7 @@ export function FloodDashboard() {
           </div>
         </aside>
         <main className="flex-1 p-4 md:p-6 lg:p-8">
-          <Tabs defaultValue="map" className="space-y-4 md:space-y-6">
+          <Tabs defaultValue="map" value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
             <TabsList className="bg-white/80 backdrop-blur-sm shadow-sm w-full md:w-auto">
               <TabsTrigger
                 value="map"
@@ -605,7 +606,7 @@ export function FloodDashboard() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <SensorChart type="waterLevel" sensors={sensors} />
+                    <SensorChart type="waterLevel" sensors={sensors} isActive={activeTab === "charts"} />
                   </CardContent>
                 </Card>
                 <Card>
@@ -617,7 +618,7 @@ export function FloodDashboard() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <SensorChart type="flowRate" sensors={sensors} />
+                    <SensorChart type="flowRate" sensors={sensors} isActive={activeTab === "charts"} />
                   </CardContent>
                 </Card>
                 <Card>
@@ -629,7 +630,7 @@ export function FloodDashboard() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <SensorChart type="soilMoisture" sensors={sensors} />
+                    <SensorChart type="soilMoisture" sensors={sensors} isActive={activeTab === "charts"} />
                   </CardContent>
                 </Card>
                 <Card>
@@ -641,7 +642,7 @@ export function FloodDashboard() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <SensorChart type="temperature" sensors={sensors} />
+                    <SensorChart type="temperature" sensors={sensors} isActive={activeTab === "charts"} />
                   </CardContent>
                 </Card>
                 <Card>
@@ -653,7 +654,7 @@ export function FloodDashboard() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <SensorChart type="precipitation" sensors={sensors} />
+                    <SensorChart type="precipitation" sensors={sensors} isActive={activeTab === "charts"} />
                   </CardContent>
                 </Card>
                 <Card>

@@ -13,9 +13,20 @@ interface SensorData {
   riskLevel: "normal" | "alert" | "danger"
 }
 
+interface AggregatedReading {
+  temperatura_c: string
+  nivel_m: string
+  caudal_l_s: string
+  humedad_pct: string
+  lluvia_mm: string
+  created_at: string
+  seq: number
+}
+
 interface SensorChartProps {
   type: "waterLevel" | "flowRate" | "soilMoisture" | "temperature" | "precipitation"
   sensors: SensorData[]
+  isActive?: boolean
 }
 
 const getUnit = (type: string) => {
@@ -50,9 +61,11 @@ const CloseIcon = () => (
   </svg>
 )
 
-export function SensorChart({ type, sensors }: SensorChartProps) {
+export function SensorChart({ type, sensors, isActive = false }: SensorChartProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isLandscape, setIsLandscape] = useState(false)
+  const [historicalData, setHistoricalData] = useState<AggregatedReading[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
   const colors = getColors()
   const unit = getUnit(type)
@@ -82,6 +95,104 @@ export function SensorChart({ type, sensors }: SensorChartProps) {
     }
   }, [isFullscreen])
 
+  // Cargar datos históricos solo cuando el componente está activo
+  useEffect(() => {
+    if (!isActive) return
+
+    const fetchHistoricalData = async () => {
+      setIsLoading(true)
+      try {
+        const response = await fetch('/api/sensores/aggregated')
+        const result = await response.json()
+        
+        if (result.ok && result.data) {
+          setHistoricalData(result.data)
+          console.log(`[SensorChart] Datos cargados: ${result.data.length} puntos (original: ${result.meta?.originalCount})`)
+        }
+      } catch (error) {
+        console.error('[SensorChart] Error al cargar datos:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchHistoricalData()
+  }, [isActive])
+
+  // Generar datos para la gráfica desde los datos históricos agregados
+  const generateChartData = () => {
+    if (historicalData.length === 0) {
+      // Fallback: usar datos actuales si no hay históricos
+      return Array.from({ length: 24 }, (_, i) => {
+        const hour = new Date()
+        hour.setHours(hour.getHours() - (23 - i))
+        return {
+          hour: hour.getHours(),
+          timestamp: hour.toISOString(),
+          values: sensors.map((sensor, index) => {
+            const baseValue = sensor[type]
+            return {
+              name: sensor.name,
+              value: baseValue,
+              color: colors[index % colors.length],
+            }
+          }),
+        }
+      })
+    }
+
+    // Agrupar datos por seq (sensor)
+    const dataBySeq = new Map<number, AggregatedReading[]>()
+    historicalData.forEach(reading => {
+      if (!dataBySeq.has(reading.seq)) {
+        dataBySeq.set(reading.seq, [])
+      }
+      dataBySeq.get(reading.seq)!.push(reading)
+    })
+
+    // Obtener todos los timestamps únicos
+    const timestamps = [...new Set(historicalData.map(r => r.created_at))].sort()
+
+    // Mapear a formato de gráfica
+    return timestamps.map(timestamp => {
+      const date = new Date(timestamp)
+      return {
+        hour: date.getHours(),
+        timestamp,
+        values: Array.from(dataBySeq.entries()).map(([seq, readings], index) => {
+          const reading = readings.find(r => r.created_at === timestamp)
+          
+          let value = 0
+          switch (type) {
+            case "waterLevel":
+              value = reading ? parseFloat(reading.nivel_m) * 100 : 0 // m a cm
+              break
+            case "flowRate":
+              value = reading ? parseFloat(reading.caudal_l_s) : 0
+              break
+            case "soilMoisture":
+              value = reading ? parseFloat(reading.humedad_pct) : 0
+              break
+            case "temperature":
+              value = reading ? parseFloat(reading.temperatura_c) : 0
+              break
+            case "precipitation":
+              value = reading ? parseFloat(reading.lluvia_mm) : 0
+              break
+          }
+
+          return {
+            name: `Sensor ${seq}`,
+            value,
+            color: colors[index % colors.length],
+          }
+        }),
+      }
+    })
+  }
+
+  const data = generateChartData()
+
   // Generate mock data points for the last 24 hours
   const generateMockData = () => {
     return Array.from({ length: 24 }, (_, i) => {
@@ -102,7 +213,7 @@ export function SensorChart({ type, sensors }: SensorChartProps) {
     })
   }
 
-  const data = generateMockData()
+  const data_old_remove_this = generateMockData()
 
   const getChartTitle = () => {
     switch (type) {
@@ -121,7 +232,27 @@ export function SensorChart({ type, sensors }: SensorChartProps) {
     }
   }
 
-  const ChartContent = ({ isFullscreenMode = false }) => (
+  const ChartContent = ({ isFullscreenMode = false }) => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <p className="text-xs text-slate-600">Cargando datos históricos...</p>
+          </div>
+        </div>
+      )
+    }
+
+    if (data.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <p className="text-sm text-slate-500">No hay datos disponibles</p>
+        </div>
+      )
+    }
+
+    return (
     <div className={`relative ${isFullscreenMode ? "h-full" : "h-full"}`}>
       {/* Chart Grid */}
       <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 200">
@@ -134,19 +265,21 @@ export function SensorChart({ type, sensors }: SensorChartProps) {
         <rect width="100%" height="100%" fill="url(#grid)" />
 
         {/* Chart lines */}
-        {sensors.map((sensor, sensorIndex) => {
+        {data[0]?.values.map((_, sensorIndex) => {
           const points = data
             .map((point, index) => {
               const x = (index / (data.length - 1)) * 380 + 10
               const sensorValue = point.values[sensorIndex]
-              const maxValue = Math.max(...data.flatMap((d) => d.values.map((v) => v.value)))
-              const y = 180 - (sensorValue.value / maxValue) * 160
+              if (!sensorValue) return null
+              const maxValue = Math.max(...data.flatMap((d) => d.values.map((v) => v?.value || 0)))
+              const y = 180 - ((sensorValue.value || 0) / maxValue) * 160
               return `${x},${y}`
             })
+            .filter(p => p !== null)
             .join(" ")
 
           return (
-            <g key={sensor.id}>
+            <g key={`sensor-${sensorIndex}`}>
               <polyline
                 fill="none"
                 stroke={colors[sensorIndex % colors.length]}
@@ -158,11 +291,12 @@ export function SensorChart({ type, sensors }: SensorChartProps) {
               {data.map((point, index) => {
                 const x = (index / (data.length - 1)) * 380 + 10
                 const sensorValue = point.values[sensorIndex]
-                const maxValue = Math.max(...data.flatMap((d) => d.values.map((v) => v.value)))
-                const y = 180 - (sensorValue.value / maxValue) * 160
+                if (!sensorValue) return null
+                const maxValue = Math.max(...data.flatMap((d) => d.values.map((v) => v?.value || 0)))
+                const y = 180 - ((sensorValue.value || 0) / maxValue) * 160
                 return (
                   <circle
-                    key={`${sensor.id}-${index}`}
+                    key={`sensor-${sensorIndex}-${index}`}
                     cx={x}
                     cy={y}
                     r={isFullscreenMode ? "4" : "3"}
@@ -176,24 +310,31 @@ export function SensorChart({ type, sensors }: SensorChartProps) {
         })}
       </svg>
 
-      {/* Legend */}
+      {/* Legend - Optimizado: mostrar solo sensores con datos */}
       <div
-        className={`absolute ${isFullscreenMode ? "bottom-4 left-4" : "bottom-2 left-2"} bg-white/95 backdrop-blur-sm rounded-lg p-3 shadow-lg`}
+        className={`absolute ${isFullscreenMode ? "bottom-4 left-4" : "bottom-2 left-2"} bg-white/95 backdrop-blur-sm rounded-lg p-3 shadow-lg max-w-xs`}
       >
-        <div className="space-y-2">
-          {sensors.map((sensor, index) => (
-            <div key={sensor.id} className={`flex items-center space-x-3 ${isFullscreenMode ? "text-sm" : "text-xs"}`}>
+        <div className="space-y-1.5">
+          {data[0]?.values.filter(v => v).slice(0, 7).map((sensorValue, index) => (
+            <div key={`legend-${index}`} className={`flex items-center space-x-2 ${isFullscreenMode ? "text-sm" : "text-xs"}`}>
               <div
-                className={`${isFullscreenMode ? "w-4 h-4" : "w-3 h-3"} rounded-full`}
+                className={`${isFullscreenMode ? "w-3 h-3" : "w-2.5 h-2.5"} rounded-full flex-shrink-0`}
                 style={{ backgroundColor: colors[index % colors.length] }}
               ></div>
-              <span className="text-slate-700 font-medium">{sensor.name}</span>
-              <span className="text-slate-500">
-                {sensor[type].toFixed(1)} {unit}
+              <span className="text-slate-700 font-medium truncate">{sensorValue.name}</span>
+              <span className="text-slate-500 text-[10px]">
+                {sensorValue.value.toFixed(1)} {unit}
               </span>
             </div>
           ))}
         </div>
+        {historicalData.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-slate-200">
+            <p className="text-[9px] text-slate-400">
+              {data.length} puntos • Intervalo 10min
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Y-axis label */}
@@ -212,7 +353,8 @@ export function SensorChart({ type, sensors }: SensorChartProps) {
         <span>Now</span>
       </div>
     </div>
-  )
+    )
+  }
 
   return (
     <>
