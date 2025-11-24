@@ -58,7 +58,6 @@ export class NotificationService {
         await registration.showNotification(title, {
           badge: '/icon.svg',
           icon: '/images/rivex-logo.png',
-          vibrate: [200, 100, 200],
           requireInteraction: true,
           ...options,
         })
