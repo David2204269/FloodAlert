@@ -91,39 +91,6 @@ const getAlertColor = (type: string) => {
 }
 
 export function AlertPanel({ alerts }: AlertPanelProps) {
-  // Generate more historical alerts for demonstration
-  const allAlerts = [
-    ...alerts,
-    {
-      id: "3",
-      type: "normal" as const,
-      message: "✅ Nivel de agua normalizado en Río Principal",
-      timestamp: "1 hour ago",
-      location: "Sensor A",
-    },
-    {
-      id: "4",
-      type: "alert" as const,
-      message: "🟡 Incremento gradual en humedad del suelo",
-      timestamp: "2 hours ago",
-      location: "Sensor B",
-    },
-    {
-      id: "5",
-      type: "danger" as const,
-      message: "🔴 Caudal crítico detectado - Evacuación recomendada",
-      timestamp: "3 hours ago",
-      location: "Sensor C",
-    },
-    {
-      id: "6",
-      type: "normal" as const,
-      message: "✅ Sistema de sensores funcionando correctamente",
-      timestamp: "4 hours ago",
-      location: "Todos los sensores",
-    },
-  ]
-
   const [selectedAlert, setSelectedAlert] = useState<string | null>(null)
 
   const handleEmergencyContact = (service: string) => {
@@ -156,7 +123,7 @@ export function AlertPanel({ alerts }: AlertPanelProps) {
       </CardHeader>
       <CardContent className="p-3 md:p-6">
         <div className="space-y-3 md:space-y-4">
-          {allAlerts.map((alert) => (
+          {alerts.map((alert) => (
             <div key={alert.id} className={`p-3 md:p-4 rounded-lg border ${getAlertColor(alert.type)}`}>
               <div className="flex items-start space-x-2 md:space-x-3">
                 <div className="flex-shrink-0 mt-0.5">{getAlertIcon(alert.type)}</div>
@@ -167,7 +134,7 @@ export function AlertPanel({ alerts }: AlertPanelProps) {
                       {alert.location}
                     </Badge>
                     <div className="flex items-center justify-between sm:justify-end space-x-2">
-                      <span className="text-xs text-muted-foreground">{alert.timestamp}</span>
+                      <span className="text-xs text-black">{alert.timestamp}</span>
                       {(alert.type === "alert" || alert.type === "danger") && (
                         <Button
                           variant="outline"
@@ -194,13 +161,12 @@ export function AlertPanel({ alerts }: AlertPanelProps) {
                         <div className="flex flex-col sm:flex-row sm:justify-between space-y-1 sm:space-y-0">
                           <span className="font-medium">Nivel de Riesgo:</span>
                           <Badge
-                            className={`text-xs w-fit ${
-                              alert.type === "danger"
-                                ? "!bg-red-600 !text-white"
-                                : alert.type === "alert"
-                                  ? "!bg-yellow-600 !text-white"
-                                  : "!bg-green-600 !text-white"
-                            }`}
+                            className={`text-xs w-fit ${alert.type === "danger"
+                              ? "!bg-red-600 !text-white"
+                              : alert.type === "alert"
+                                ? "!bg-yellow-600 !text-white"
+                                : "!bg-green-600 !text-white"
+                              }`}
                           >
                             {alert.type.toUpperCase()}
                           </Badge>

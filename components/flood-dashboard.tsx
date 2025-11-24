@@ -136,11 +136,10 @@ const SensorCard = ({
 }) => {
   return (
     <Card
-      className={`cursor-pointer transition-all duration-200 mb-3 sensor-name-override ${
-        isSelected
-          ? "border-2 border-blue-500 shadow-lg scale-[1.02]"
-          : "border border-slate-200 shadow-sm hover:shadow-md"
-      }`}
+      className={`cursor-pointer transition-all duration-200 mb-3 sensor-name-override ${isSelected
+        ? "border-2 border-blue-500 shadow-lg scale-[1.02]"
+        : "border border-slate-200 shadow-sm hover:shadow-md"
+        }`}
       onClick={onClick}
     >
       <CardContent className="p-4">
@@ -159,7 +158,7 @@ const SensorCard = ({
             </div>
             <span className="font-bold text-blue-900">{sensor.waterLevel.toFixed(1)} cm</span>
           </div>
-          
+
           <div className="flex items-center justify-between p-2 bg-green-50 rounded-lg">
             <div className="flex items-center gap-1.5 text-green-700">
               <ActivityIcon />
@@ -167,7 +166,7 @@ const SensorCard = ({
             </div>
             <span className="font-bold text-green-900">{sensor.flowRate.toFixed(0)} L/s</span>
           </div>
-          
+
           <div className="flex items-center justify-between p-2 bg-orange-50 rounded-lg">
             <div className="flex items-center gap-1.5 text-orange-700">
               <ThermometerIcon />
@@ -175,7 +174,7 @@ const SensorCard = ({
             </div>
             <span className="font-bold text-orange-900">{sensor.soilMoisture.toFixed(0)}%</span>
           </div>
-          
+
           <div className="flex items-center justify-between p-2 bg-red-50 rounded-lg">
             <div className="flex items-center gap-1.5 text-red-700">
               <ThermometerIcon />
@@ -183,7 +182,7 @@ const SensorCard = ({
             </div>
             <span className="font-bold text-red-900">{sensor.temperature.toFixed(1)}°C</span>
           </div>
-          
+
           <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
             <div className="flex items-center gap-1.5 text-purple-700">
               <CloudRainIcon />
@@ -211,22 +210,7 @@ export function FloodDashboard() {
     message: string
     timestamp: string
     location: string
-  }>>([
-    {
-      id: "1",
-      type: "danger",
-      message: "⚠️ Alto riesgo de inundación en Área Industrial",
-      timestamp: "2 min ago",
-      location: "Sensor C",
-    },
-    {
-      id: "2",
-      type: "alert",
-      message: "🟡 Nivel de agua elevado en Zona Urbana",
-      timestamp: "5 min ago",
-      location: "Sensor B",
-    },
-  ])
+  }>>([])
 
   const [showNotifications, setShowNotifications] = useState(false)
 
@@ -238,14 +222,14 @@ export function FloodDashboard() {
     try {
       const response = await fetch('/api/sensores')
       const result = await response.json()
-      
+
       if (result.ok && result.data) {
         // Transformar los datos de Supabase al formato del dashboard
         const transformedData: SensorData[] = result.data.map((lectura: any, index: number) => {
           const temp = parseFloat(lectura.temperatura_c) || 0
           const nivel = lectura.nivel_m || 0
           const caudal = lectura.caudal_l_s || 0
-          
+
           // Determinar nivel de riesgo basado en los valores
           let riskLevel: "normal" | "alert" | "danger" = "normal"
           if (nivel > 5 || caudal > 150) {
@@ -253,7 +237,7 @@ export function FloodDashboard() {
           } else if (nivel > 3 || caudal > 100) {
             riskLevel = "alert"
           }
-          
+
           return {
             id: lectura.id?.toString() || `sensor-${index}`,
             name: `Sensor ${lectura.seq || index + 1}`,
@@ -264,12 +248,12 @@ export function FloodDashboard() {
             temperature: temp,
             precipitation: lectura.lluvia_mm || 0,
             riskLevel,
-            lastUpdate: lectura.created_at 
+            lastUpdate: lectura.created_at
               ? new Date(lectura.created_at).toLocaleString('es-ES')
               : 'Hace un momento'
           }
         })
-        
+
         setSensors(transformedData)
       }
     } catch (error) {
@@ -282,10 +266,10 @@ export function FloodDashboard() {
   // Cargar datos al montar el componente
   useEffect(() => {
     fetchSensorData()
-    
+
     // Actualizar cada 10 segundos
     const interval = setInterval(fetchSensorData, 10000)
-    
+
     return () => clearInterval(interval)
   }, [])
 
@@ -333,28 +317,34 @@ export function FloodDashboard() {
       if (sensor.riskLevel === 'danger' || sensor.riskLevel === 'alert') {
         const existingAlert = alerts.find(
           (alert) =>
-            alert.location === sensor.name &&
+            alert.id.includes(sensor.id) &&
             ((sensor.riskLevel === 'danger' && alert.type === 'danger') ||
               (sensor.riskLevel === 'alert' && alert.type === 'alert'))
         )
 
-        if (!existingAlert && permission === 'granted') {
+        if (!existingAlert) {
           const newAlert = {
             id: `sensor-${sensor.id}-${Date.now()}`,
             type: sensor.riskLevel as 'alert' | 'danger',
             message:
               sensor.riskLevel === 'danger'
-                ? `🔴 Nivel crítico detectado en ${sensor.name}`
-                : `🟡 Nivel elevado detectado en ${sensor.name}`,
-            timestamp: 'Justo ahora',
-            location: sensor.name,
+                ? `Nivel crítico detectado - Nivel: ${sensor.waterLevel.toFixed(1)} cm, Caudal: ${sensor.flowRate.toFixed(0)} L/s`
+                : `Nivel elevado detectado - Nivel: ${sensor.waterLevel.toFixed(1)} cm, Caudal: ${sensor.flowRate.toFixed(0)} L/s`,
+            timestamp: new Date().toLocaleString('es-ES', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            }),
+            location: 'Estación Rivex',
           }
 
           setAlerts((prev) => [newAlert, ...prev])
         }
       }
     })
-  }, [sensors, alerts, permission])
+  }, [sensors, alerts])
 
   const dangerSensors = sensors.filter((s) => s.riskLevel === "danger").length
   const alertSensors = sensors.filter((s) => s.riskLevel === "alert").length
@@ -387,7 +377,7 @@ export function FloodDashboard() {
               </svg>
             </Button>
             <div className="relative">
-              
+
               {showNotifications && (
                 <div className="fixed top-[90px] right-8 w-80 bg-white rounded-lg shadow-xl border border-slate-200 z-[99999] max-h-96 overflow-y-auto">
                   <div className="p-4 border-b border-slate-200">
