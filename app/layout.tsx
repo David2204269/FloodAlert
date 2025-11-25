@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: 'Sistema de Alerta de Inundaciones - Rivex',
   description: 'Monitoreo en tiempo real de niveles de agua y alertas de inundación',
   generator: 'v0.app',
+  manifest: '/manifest.json',
   icons: {
     icon: '/icon.svg',
   },
