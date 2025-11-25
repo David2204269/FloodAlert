@@ -1,0 +1,11 @@
+CREATE TABLE lecturas (
+  id BIGSERIAL PRIMARY KEY,
+  temperatura_c TEXT NOT NULL,
+  humedad_pct INTEGER NOT NULL,
+  caudal_l_s DOUBLE PRECISION NOT NULL,
+  lluvia_mm DOUBLE PRECISION NOT NULL,
+  nivel_m DOUBLE PRECISION NOT NULL,
+  seq BIGINT NOT NULL,
+  timestamp BIGINT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);

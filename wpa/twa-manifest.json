@@ -1,0 +1,45 @@
+{
+  "packageId": "com.rivex.floodalert",
+  "host": "alerta-flame.vercel.app",
+  "name": "Rivex FloodAlert",
+  "launcherName": "Rivex",
+  "display": "standalone",
+  "orientation": "any",
+  "themeColor": "#1E293B",
+  "navigationColor": "#1E293B",
+  "navigationColorDark": "#0F172A",
+  "navigationDividerColor": "#1E293B",
+  "navigationDividerColorDark": "#0F172A",
+  "backgroundColor": "#0F172A",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://alerta-flame.vercel.app/icons/icon-512x512.png",
+  "maskableIconUrl": "https://alerta-flame.vercel.app/icons/icon-512x512.png",
+  "monochromeIconUrl": "https://alerta-flame.vercel.app/icons/icon-512x512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "android.keystore",
+    "alias": "android"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://alerta-flame.vercel.app/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": true
+    },
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "minSdkVersion": 23,
+  "includeNotificationDelegation": true
+}
