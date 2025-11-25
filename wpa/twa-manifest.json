@@ -1,6 +1,6 @@
 {
   "packageId": "com.rivex.floodalert",
-  "host": "alerta-flame.vercel.app",
+  "host": "alerta-ecru.vercel.app",
   "name": "Rivex FloodAlert",
   "launcherName": "Rivex",
   "display": "standalone",
@@ -13,9 +13,9 @@
   "backgroundColor": "#0F172A",
   "enableNotifications": true,
   "startUrl": "/",
-  "iconUrl": "https://alerta-flame.vercel.app/icons/icon-512x512.png",
-  "maskableIconUrl": "https://alerta-flame.vercel.app/icons/icon-512x512.png",
-  "monochromeIconUrl": "https://alerta-flame.vercel.app/icons/icon-512x512.png",
+  "iconUrl": "https://alerta-ecru.vercel.app/icons/icon-512x512.png",
+  "maskableIconUrl": "https://alerta-ecru.vercel.app/icons/icon-512x512.png",
+  "monochromeIconUrl": "https://alerta-ecru.vercel.app/icons/icon-512x512.png",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
     "path": "android.keystore",
@@ -25,7 +25,7 @@
   "appVersionCode": 1,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
-  "webManifestUrl": "https://alerta-flame.vercel.app/manifest.json",
+  "webManifestUrl": "https://alerta-ecru.vercel.app/manifest.json",
   "fallbackType": "customtabs",
   "features": {
     "locationDelegation": {

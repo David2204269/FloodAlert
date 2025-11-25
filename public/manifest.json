@@ -2,7 +2,7 @@
   "name": "Rivex FloodAlert",
   "short_name": "Rivex",
   "description": "Sistema de Alerta de Inundaciones - Monitoreo en tiempo real",
-  "start_url": "/",
+  "start_url": "https://alerta-ecru.vercel.app/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#0F172A",
