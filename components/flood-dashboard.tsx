@@ -144,7 +144,7 @@ const SensorCard = ({
     >
       <CardContent className="p-4">
         <div className="flex items-start justify-between mb-3">
-          <h3 className="font-semibold text-sm text-slate-800 leading-tight sensor-name-text">{sensor.name}</h3>
+          <h3 className="font-semibold text-sm text-slate-800 leading-tight sensor-name-text">Estación</h3>
           <Badge className={getRiskColor(sensor.riskLevel)} variant="default">
             {getRiskIcon(sensor.riskLevel)}
           </Badge>
