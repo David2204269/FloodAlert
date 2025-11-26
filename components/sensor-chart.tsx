@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback, memo } from "react"
 
 interface SensorData {
   id: string
@@ -29,37 +29,44 @@ interface SensorChartProps {
   isActive?: boolean
 }
 
+interface ChartPoint {
+  hour: number
+  timestamp: string
+  values: Array<{
+    name: string
+    value: number
+    color: string
+  }>
+}
+
+const COLORS = ["#22c55e", "#eab308", "#f97316", "#ef4444", "#3b82f6", "#8b5cf6", "#ec4899"]
+const MAX_DISPLAY_POINTS = 100 // Máximo de puntos a mostrar para rendimiento (aumentado para más detalle)
+
 const getUnit = (type: string) => {
   switch (type) {
-    case "waterLevel":
-      return "cm"
-    case "flowRate":
-      return "L/s"
-    case "soilMoisture":
-      return "%"
-    case "temperature":
-      return "°C"
-    case "precipitation":
-      return "mm"
-    default:
-      return ""
+    case "waterLevel": return "cm"
+    case "flowRate": return "L/s"
+    case "soilMoisture": return "%"
+    case "temperature": return "°C"
+    case "precipitation": return "mm"
+    default: return ""
   }
 }
 
-const getColors = () => ["#22c55e", "#eab308", "#f97316", "#ef4444", "#3b82f6"]
-
-const ExpandIcon = () => (
+const ExpandIcon = memo(() => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
   </svg>
-)
+))
+ExpandIcon.displayName = 'ExpandIcon'
 
-const CloseIcon = () => (
+const CloseIcon = memo(() => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <line x1="18" y1="6" x2="6" y2="18"></line>
     <line x1="6" y1="6" x2="18" y2="18"></line>
   </svg>
-)
+))
+CloseIcon.displayName = 'CloseIcon'
 
 export function SensorChart({ type, sensors, isActive = false }: SensorChartProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -67,7 +74,6 @@ export function SensorChart({ type, sensors, isActive = false }: SensorChartProp
   const [historicalData, setHistoricalData] = useState<AggregatedReading[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
-  const colors = getColors()
   const unit = getUnit(type)
 
   useEffect(() => {
@@ -85,7 +91,6 @@ export function SensorChart({ type, sensors, isActive = false }: SensorChartProp
     window.addEventListener("resize", handleOrientationChange)
     window.addEventListener("keydown", handleKeyDown)
 
-    // Initial check
     handleOrientationChange()
 
     return () => {
@@ -119,120 +124,105 @@ export function SensorChart({ type, sensors, isActive = false }: SensorChartProp
     fetchHistoricalData()
   }, [isActive])
 
-  // Generar datos para la gráfica desde los datos históricos agregados
-  const generateChartData = () => {
+  // Memoizar la generación de datos para evitar recálculos
+  const chartData = useMemo<ChartPoint[]>(() => {
     if (historicalData.length === 0) {
-      // Fallback: usar datos actuales si no hay históricos
       return Array.from({ length: 24 }, (_, i) => {
         const hour = new Date()
         hour.setHours(hour.getHours() - (23 - i))
         return {
           hour: hour.getHours(),
           timestamp: hour.toISOString(),
-          values: sensors.map((sensor, index) => {
-            const baseValue = sensor[type]
-            return {
-              name: sensor.name,
-              value: baseValue,
-              color: colors[index % colors.length],
-            }
-          }),
+          values: sensors.slice(0, 5).map((sensor, index) => ({
+            name: sensor.name,
+            value: sensor[type],
+            color: COLORS[index % COLORS.length],
+          })),
         }
       })
     }
 
     // Agrupar datos por seq (sensor)
     const dataBySeq = new Map<number, AggregatedReading[]>()
-    historicalData.forEach(reading => {
+    historicalData.forEach((reading: AggregatedReading) => {
       if (!dataBySeq.has(reading.seq)) {
         dataBySeq.set(reading.seq, [])
       }
       dataBySeq.get(reading.seq)!.push(reading)
     })
 
-    // Obtener todos los timestamps únicos
-    const timestamps = [...new Set(historicalData.map(r => r.created_at))].sort()
+    // Obtener timestamps únicos y limitar cantidad
+    const allTimestamps = [...new Set(historicalData.map((r: AggregatedReading) => r.created_at))].sort()
+    
+    // Reducir puntos si hay demasiados (downsample)
+    let timestamps = allTimestamps
+    if (allTimestamps.length > MAX_DISPLAY_POINTS) {
+      const step = Math.ceil(allTimestamps.length / MAX_DISPLAY_POINTS)
+      timestamps = allTimestamps.filter((_, i) => i % step === 0)
+    }
 
-    // Mapear a formato de gráfica
-    return timestamps.map(timestamp => {
+    const seqEntries = Array.from(dataBySeq.entries()).slice(0, 7)
+
+    return timestamps.map((timestamp: string) => {
       const date = new Date(timestamp)
       return {
         hour: date.getHours(),
         timestamp,
-        values: Array.from(dataBySeq.entries()).map(([seq, readings], index) => {
-          const reading = readings.find(r => r.created_at === timestamp)
+        values: seqEntries.map(([seq, readings], index) => {
+          const reading = readings.find((r: AggregatedReading) => r.created_at === timestamp)
           
           let value = 0
-          switch (type) {
-            case "waterLevel":
-              value = reading ? parseFloat(reading.nivel_m) * 100 : 0 // m a cm
-              break
-            case "flowRate":
-              value = reading ? parseFloat(reading.caudal_l_s) : 0
-              break
-            case "soilMoisture":
-              value = reading ? parseFloat(reading.humedad_pct) : 0
-              break
-            case "temperature":
-              value = reading ? parseFloat(reading.temperatura_c) : 0
-              break
-            case "precipitation":
-              value = reading ? parseFloat(reading.lluvia_mm) : 0
-              break
+          if (reading) {
+            switch (type) {
+              case "waterLevel":
+                value = parseFloat(reading.nivel_m) * 100
+                break
+              case "flowRate":
+                value = parseFloat(reading.caudal_l_s)
+                break
+              case "soilMoisture":
+                value = parseFloat(reading.humedad_pct)
+                break
+              case "temperature":
+                value = parseFloat(reading.temperatura_c)
+                break
+              case "precipitation":
+                value = parseFloat(reading.lluvia_mm)
+                break
+            }
           }
 
           return {
             name: `Sensor ${seq}`,
-            value,
-            color: colors[index % colors.length],
+            value: isNaN(value) ? 0 : value,
+            color: COLORS[index % COLORS.length],
           }
         }),
       }
     })
-  }
+  }, [historicalData, sensors, type])
 
-  const data = generateChartData()
+  // Memoizar cálculos pesados del SVG
+  const maxValue = useMemo(() => {
+    if (chartData.length === 0) return 1
+    return Math.max(...chartData.flatMap((d: ChartPoint) => d.values.map(v => v?.value || 0)), 1)
+  }, [chartData])
 
-  // Generate mock data points for the last 24 hours
-  const generateMockData = () => {
-    return Array.from({ length: 24 }, (_, i) => {
-      const hour = new Date()
-      hour.setHours(hour.getHours() - (23 - i))
-      return {
-        hour: hour.getHours(),
-        values: sensors.map((sensor, index) => {
-          const baseValue = sensor[type]
-          const variation = (Math.random() - 0.5) * 20
-          return {
-            name: sensor.name,
-            value: Math.max(0, baseValue + variation),
-            color: colors[index % colors.length],
-          }
-        }),
-      }
-    })
-  }
-
-  const data_old_remove_this = generateMockData()
-
-  const getChartTitle = () => {
+  const getChartTitle = useCallback(() => {
     switch (type) {
-      case "waterLevel":
-        return "Nivel de Agua"
-      case "flowRate":
-        return "Caudal"
-      case "soilMoisture":
-        return "Humedad del Suelo"
-      case "temperature":
-        return "Temperatura"
-      case "precipitation":
-        return "Precipitación"
-      default:
-        return "Gráfico"
+      case "waterLevel": return "Nivel de Agua"
+      case "flowRate": return "Caudal"
+      case "soilMoisture": return "Humedad del Suelo"
+      case "temperature": return "Temperatura"
+      case "precipitation": return "Precipitación"
+      default: return "Gráfico"
     }
-  }
+  }, [type])
 
-  const ChartContent = ({ isFullscreenMode = false }) => {
+  // Solo mostrar puntos (círculos) si hay pocos datos para no saturar visualmente
+  const showDataPoints = chartData.length <= 40
+
+  const ChartContent = ({ isFullscreenMode = false }: { isFullscreenMode?: boolean }) => {
     if (isLoading) {
       return (
         <div className="flex items-center justify-center h-full">
@@ -244,7 +234,7 @@ export function SensorChart({ type, sensors, isActive = false }: SensorChartProp
       )
     }
 
-    if (data.length === 0) {
+    if (chartData.length === 0) {
       return (
         <div className="flex items-center justify-center h-full">
           <p className="text-sm text-slate-500">No hay datos disponibles</p>
@@ -254,45 +244,39 @@ export function SensorChart({ type, sensors, isActive = false }: SensorChartProp
 
     return (
     <div className={`relative ${isFullscreenMode ? "h-full" : "h-full"}`}>
-      {/* Chart Grid */}
       <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 200">
-        {/* Grid lines */}
         <defs>
-          <pattern id="grid" width="40" height="20" patternUnits="userSpaceOnUse">
+          <pattern id={`grid-${type}`} width="40" height="20" patternUnits="userSpaceOnUse">
             <path d="M 40 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" strokeWidth="0.5" />
           </pattern>
         </defs>
-        <rect width="100%" height="100%" fill="url(#grid)" />
+        <rect width="100%" height="100%" fill={`url(#grid-${type})`} />
 
-        {/* Chart lines */}
-        {data[0]?.values.map((_, sensorIndex) => {
-          const points = data
-            .map((point, index) => {
-              const x = (index / (data.length - 1)) * 380 + 10
+        {chartData[0]?.values.map((_, sensorIndex: number) => {
+          const points = chartData
+            .map((point: ChartPoint, index: number) => {
+              const x = (index / (chartData.length - 1)) * 380 + 10
               const sensorValue = point.values[sensorIndex]
               if (!sensorValue) return null
-              const maxValue = Math.max(...data.flatMap((d) => d.values.map((v) => v?.value || 0)))
               const y = 180 - ((sensorValue.value || 0) / maxValue) * 160
               return `${x},${y}`
             })
-            .filter(p => p !== null)
+            .filter((p): p is string => p !== null)
             .join(" ")
 
           return (
             <g key={`sensor-${sensorIndex}`}>
               <polyline
                 fill="none"
-                stroke={colors[sensorIndex % colors.length]}
+                stroke={COLORS[sensorIndex % COLORS.length]}
                 strokeWidth={isFullscreenMode ? "3" : "2"}
                 points={points}
                 className="drop-shadow-sm"
               />
-              {/* Data points */}
-              {data.map((point, index) => {
-                const x = (index / (data.length - 1)) * 380 + 10
+              {showDataPoints && chartData.map((point: ChartPoint, index: number) => {
+                const x = (index / (chartData.length - 1)) * 380 + 10
                 const sensorValue = point.values[sensorIndex]
                 if (!sensorValue) return null
-                const maxValue = Math.max(...data.flatMap((d) => d.values.map((v) => v?.value || 0)))
                 const y = 180 - ((sensorValue.value || 0) / maxValue) * 160
                 return (
                   <circle
@@ -300,7 +284,7 @@ export function SensorChart({ type, sensors, isActive = false }: SensorChartProp
                     cx={x}
                     cy={y}
                     r={isFullscreenMode ? "4" : "3"}
-                    fill={colors[sensorIndex % colors.length]}
+                    fill={COLORS[sensorIndex % COLORS.length]}
                     className="drop-shadow-sm"
                   />
                 )
@@ -310,16 +294,15 @@ export function SensorChart({ type, sensors, isActive = false }: SensorChartProp
         })}
       </svg>
 
-      {/* Legend - Optimizado: mostrar solo sensores con datos */}
       <div
         className={`absolute ${isFullscreenMode ? "bottom-4 left-4" : "bottom-2 left-2"} bg-white/95 backdrop-blur-sm rounded-lg p-3 shadow-lg max-w-xs`}
       >
         <div className="space-y-1.5">
-          {data[0]?.values.filter(v => v).slice(0, 7).map((sensorValue, index) => (
+          {chartData[0]?.values.filter(v => v).slice(0, 7).map((sensorValue, index: number) => (
             <div key={`legend-${index}`} className={`flex items-center space-x-2 ${isFullscreenMode ? "text-sm" : "text-xs"}`}>
               <div
                 className={`${isFullscreenMode ? "w-3 h-3" : "w-2.5 h-2.5"} rounded-full flex-shrink-0`}
-                style={{ backgroundColor: colors[index % colors.length] }}
+                style={{ backgroundColor: COLORS[index % COLORS.length] }}
               ></div>
               <span className="text-slate-700 font-medium truncate">{sensorValue.name}</span>
               <span className="text-slate-500 text-[10px]">
@@ -331,20 +314,18 @@ export function SensorChart({ type, sensors, isActive = false }: SensorChartProp
         {historicalData.length > 0 && (
           <div className="mt-2 pt-2 border-t border-slate-200">
             <p className="text-[9px] text-slate-400">
-              {data.length} puntos • Intervalo 10min
+              {chartData.length} puntos • Intervalo 10min
             </p>
           </div>
         )}
       </div>
 
-      {/* Y-axis label */}
       <div
         className={`absolute left-1 top-1/2 transform -rotate-90 -translate-y-1/2 ${isFullscreenMode ? "text-sm" : "text-xs"} text-slate-600 font-medium`}
       >
         {unit}
       </div>
 
-      {/* X-axis labels */}
       <div
         className={`absolute bottom-0 left-0 right-0 flex justify-between px-2 ${isFullscreenMode ? "text-sm" : "text-xs"} text-slate-600`}
       >
@@ -368,7 +349,7 @@ export function SensorChart({ type, sensors, isActive = false }: SensorChartProp
           <ExpandIcon />
         </button>
 
-        <ChartContent />
+        <ChartContent isFullscreenMode={false} />
       </div>
 
       {isFullscreen && (
