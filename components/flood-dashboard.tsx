@@ -65,8 +65,8 @@ function calculateRiskLevel(lectura: any): "normal" | "alert" | "danger" {
 
   // Verificar peligro primero (prioridad más alta)
   if (
-    nivelCm >= THRESHOLDS.waterLevel.danger ||
-    caudal >= THRESHOLDS.flowRate.danger ||
+    nivelCm >= THRESHOLDS.waterLevel.danger &&
+    caudal >= THRESHOLDS.flowRate.danger &&
     humedad >= THRESHOLDS.soilMoisture.danger
   ) {
     return "danger"
@@ -74,8 +74,8 @@ function calculateRiskLevel(lectura: any): "normal" | "alert" | "danger" {
 
   // Verificar alerta
   if (
-    nivelCm >= THRESHOLDS.waterLevel.alert ||
-    caudal >= THRESHOLDS.flowRate.alert ||
+    nivelCm >= THRESHOLDS.waterLevel.alert &&
+    caudal >= THRESHOLDS.flowRate.alert &&
     humedad >= THRESHOLDS.soilMoisture.alert
   ) {
     return "alert"
