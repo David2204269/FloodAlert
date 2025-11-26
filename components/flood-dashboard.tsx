@@ -24,6 +24,66 @@ interface SensorData {
   lastUpdate: string
 }
 
+interface RiskCounts {
+  normal: number
+  alert: number
+  danger: number
+}
+
+// Umbrales de alerta definidos
+const THRESHOLDS = {
+  waterLevel: { // en cm
+    alert: 3,
+    danger: 3, // Sensor solo lee 0 o 3, así que 3 = peligro directo
+  },
+  flowRate: { // en L/s
+    alert: 1,
+    danger: 2,
+  },
+  soilMoisture: { // en %
+    alert: 60,
+    danger: 90,
+  },
+  // Temperatura y precipitación: siempre normal
+  temperature: {
+    alert: Infinity,
+    danger: Infinity,
+  },
+  precipitation: {
+    alert: Infinity,
+    danger: Infinity,
+  },
+}
+
+/**
+ * Determina el nivel de riesgo de una lectura basado en los umbrales
+ */
+function calculateRiskLevel(lectura: any): "normal" | "alert" | "danger" {
+  const nivelCm = (parseFloat(lectura.nivel_m) || 0) * 100 // Convertir m a cm
+  const caudal = parseFloat(lectura.caudal_l_s) || 0
+  const humedad = parseFloat(lectura.humedad_pct) || 0
+
+  // Verificar peligro primero (prioridad más alta)
+  if (
+    nivelCm >= THRESHOLDS.waterLevel.danger ||
+    caudal >= THRESHOLDS.flowRate.danger ||
+    humedad >= THRESHOLDS.soilMoisture.danger
+  ) {
+    return "danger"
+  }
+
+  // Verificar alerta
+  if (
+    nivelCm >= THRESHOLDS.waterLevel.alert ||
+    caudal >= THRESHOLDS.flowRate.alert ||
+    humedad >= THRESHOLDS.soilMoisture.alert
+  ) {
+    return "alert"
+  }
+
+  return "normal"
+}
+
 const CheckCircleIcon = () => (
   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
     <path
@@ -217,6 +277,9 @@ export function FloodDashboard() {
   const { sendNotification, permission } = useNotifications()
   const previousAlertsRef = useRef<typeof alerts>([])
 
+  // Estado para contadores de riesgo globales (basado en todas las lecturas)
+  const [riskCounts, setRiskCounts] = useState<RiskCounts>({ normal: 0, alert: 0, danger: 0 })
+
   // Función para obtener datos de la API
   const fetchSensorData = async () => {
     try {
@@ -224,19 +287,24 @@ export function FloodDashboard() {
       const result = await response.json()
 
       if (result.ok && result.data) {
+        // Contar lecturas por nivel de riesgo
+        const counts: RiskCounts = { normal: 0, alert: 0, danger: 0 }
+        
+        result.data.forEach((lectura: any) => {
+          const risk = calculateRiskLevel(lectura)
+          counts[risk]++
+        })
+        
+        setRiskCounts(counts)
+
         // Transformar los datos de Supabase al formato del dashboard
         const transformedData: SensorData[] = result.data.map((lectura: any, index: number) => {
           const temp = parseFloat(lectura.temperatura_c) || 0
-          const nivel = lectura.nivel_m || 0
-          const caudal = lectura.caudal_l_s || 0
+          const nivel = parseFloat(lectura.nivel_m) || 0
+          const caudal = parseFloat(lectura.caudal_l_s) || 0
 
-          // Determinar nivel de riesgo basado en los valores
-          let riskLevel: "normal" | "alert" | "danger" = "normal"
-          if (nivel > 5 || caudal > 150) {
-            riskLevel = "danger"
-          } else if (nivel > 3 || caudal > 100) {
-            riskLevel = "alert"
-          }
+          // Usar la función de clasificación centralizada
+          const riskLevel = calculateRiskLevel(lectura)
 
           return {
             id: lectura.id?.toString() || `sensor-${index}`,
@@ -346,6 +414,12 @@ export function FloodDashboard() {
     })
   }, [sensors, alerts])
 
+  // Contadores para el Estado General (basado en todas las lecturas)
+  const normalCount = riskCounts.normal
+  const alertCount = riskCounts.alert
+  const dangerCount = riskCounts.danger
+
+  // Contadores alternativos por sensor único (para referencia)
   const dangerSensors = sensors.filter((s) => s.riskLevel === "danger").length
   const alertSensors = sensors.filter((s) => s.riskLevel === "alert").length
   const normalSensors = sensors.filter((s) => s.riskLevel === "normal").length
@@ -461,6 +535,7 @@ export function FloodDashboard() {
           </div>
           <div>
             <h2 className="text-base md:text-lg font-bold mb-3 md:mb-4 text-slate-800">Estado General</h2>
+            <p className="text-xs text-slate-500 mb-2">Clasificación de todas las lecturas</p>
             <div className="grid gap-2 md:gap-3">
               <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200 shadow-sm hover:shadow-md transition-shadow">
                 <CardContent className="p-3 md:p-4">
@@ -471,7 +546,7 @@ export function FloodDashboard() {
                       </div>
                       <span className="font-semibold text-green-800 text-sm md:text-base">Normal</span>
                     </div>
-                    <Badge className="bg-green-600 text-white shadow-sm text-sm">{normalSensors}</Badge>
+                    <Badge className="bg-green-600 text-white shadow-sm text-sm">{normalCount}</Badge>
                   </div>
                 </CardContent>
               </Card>
@@ -482,9 +557,12 @@ export function FloodDashboard() {
                       <div className="p-1.5 md:p-2 bg-yellow-100 rounded-lg">
                         <AlertTriangleIcon />
                       </div>
-                      <span className="font-semibold text-yellow-800 text-sm md:text-base">Alerta</span>
+                      <div>
+                        <span className="font-semibold text-yellow-800 text-sm md:text-base">Precaución</span>
+                        <p className="text-[10px] text-yellow-600">Nivel≥3cm, Caudal≥1L/s, Hum≥60%</p>
+                      </div>
                     </div>
-                    <Badge className="bg-yellow-600 text-white shadow-sm text-sm">{alertSensors}</Badge>
+                    <Badge className="bg-yellow-600 text-white shadow-sm text-sm">{alertCount}</Badge>
                   </div>
                 </CardContent>
               </Card>
@@ -495,9 +573,12 @@ export function FloodDashboard() {
                       <div className="p-1.5 md:p-2 bg-red-100 rounded-lg">
                         <XCircleIcon />
                       </div>
-                      <span className="font-semibold text-red-800 text-sm md:text-base">Peligro</span>
+                      <div>
+                        <span className="font-semibold text-red-800 text-sm md:text-base">Crítico</span>
+                        <p className="text-[10px] text-red-600">Nivel≥3cm, Caudal≥2L/s, Hum≥90%</p>
+                      </div>
                     </div>
-                    <Badge className="bg-red-600 text-white shadow-sm text-sm">{dangerSensors}</Badge>
+                    <Badge className="bg-red-600 text-white shadow-sm text-sm">{dangerCount}</Badge>
                   </div>
                 </CardContent>
               </Card>

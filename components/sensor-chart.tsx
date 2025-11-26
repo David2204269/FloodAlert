@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback, memo } from "react"
+import { useState, useEffect, useMemo, useCallback, memo, useRef } from "react"
 
 interface SensorData {
   id: string
@@ -37,6 +37,15 @@ interface ChartPoint {
     value: number
     color: string
   }>
+}
+
+interface TooltipData {
+  x: number
+  y: number
+  timestamp: string
+  sensorName: string
+  value: number
+  color: string
 }
 
 const COLORS = ["#22c55e", "#eab308", "#f97316", "#ef4444", "#3b82f6", "#8b5cf6", "#ec4899"]
@@ -222,7 +231,78 @@ export function SensorChart({ type, sensors, isActive = false }: SensorChartProp
   // Solo mostrar puntos (círculos) si hay pocos datos para no saturar visualmente
   const showDataPoints = chartData.length <= 40
 
+  // Calcular estadísticas (mínimo, máximo, tendencia)
+  const stats = useMemo(() => {
+    if (chartData.length === 0) return null
+    
+    // Obtener todos los valores de todos los sensores
+    const allValues = chartData.flatMap(d => d.values.map(v => v?.value || 0)).filter(v => v > 0)
+    
+    if (allValues.length === 0) return null
+    
+    const min = Math.min(...allValues)
+    const max = Math.max(...allValues)
+    
+    // Calcular tendencia comparando primera mitad vs segunda mitad
+    const midPoint = Math.floor(chartData.length / 2)
+    const firstHalfAvg = chartData.slice(0, midPoint).flatMap(d => d.values.map(v => v?.value || 0)).reduce((a, b) => a + b, 0) / (midPoint * (chartData[0]?.values.length || 1))
+    const secondHalfAvg = chartData.slice(midPoint).flatMap(d => d.values.map(v => v?.value || 0)).reduce((a, b) => a + b, 0) / ((chartData.length - midPoint) * (chartData[0]?.values.length || 1))
+    
+    const diff = secondHalfAvg - firstHalfAvg
+    const threshold = max * 0.05 // 5% del máximo como umbral de cambio significativo
+    
+    let trend: "up" | "down" | "stable" = "stable"
+    if (diff > threshold) trend = "up"
+    else if (diff < -threshold) trend = "down"
+    
+    return { min, max, trend }
+  }, [chartData])
+
   const ChartContent = ({ isFullscreenMode = false }: { isFullscreenMode?: boolean }) => {
+    const [tooltip, setTooltip] = useState<TooltipData | null>(null)
+    const svgRef = useRef<SVGSVGElement>(null)
+
+    const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+      if (!svgRef.current || chartData.length === 0) return
+      
+      const svg = svgRef.current
+      const rect = svg.getBoundingClientRect()
+      const mouseX = ((e.clientX - rect.left) / rect.width) * 400
+      const mouseY = ((e.clientY - rect.top) / rect.height) * 200
+      
+      // Encontrar el punto más cercano
+      let closestDistance = Infinity
+      let closestPoint: TooltipData | null = null
+      
+      chartData.forEach((point, pointIndex) => {
+        const x = (pointIndex / (chartData.length - 1)) * 380 + 10
+        
+        point.values.forEach((sensorValue) => {
+          if (!sensorValue) return
+          const y = 180 - ((sensorValue.value || 0) / maxValue) * 160
+          
+          const distance = Math.sqrt((mouseX - x) ** 2 + (mouseY - y) ** 2)
+          
+          if (distance < closestDistance && distance < 30) { // Solo si está cerca (30px)
+            closestDistance = distance
+            closestPoint = {
+              x,
+              y,
+              timestamp: point.timestamp,
+              sensorName: sensorValue.name,
+              value: sensorValue.value,
+              color: sensorValue.color
+            }
+          }
+        })
+      })
+      
+      setTooltip(closestPoint)
+    }, [chartData, maxValue])
+
+    const handleMouseLeave = useCallback(() => {
+      setTooltip(null)
+    }, [])
     if (isLoading) {
       return (
         <div className="flex items-center justify-center h-full">
@@ -244,7 +324,13 @@ export function SensorChart({ type, sensors, isActive = false }: SensorChartProp
 
     return (
     <div className={`relative ${isFullscreenMode ? "h-full" : "h-full"}`}>
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 200">
+      <svg 
+        ref={svgRef}
+        className="absolute inset-0 w-full h-full cursor-crosshair" 
+        viewBox="0 0 400 200"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+      >
         <defs>
           <pattern id={`grid-${type}`} width="40" height="20" patternUnits="userSpaceOnUse">
             <path d="M 40 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" strokeWidth="0.5" />
@@ -292,33 +378,50 @@ export function SensorChart({ type, sensors, isActive = false }: SensorChartProp
             </g>
           )
         })}
+
+        {/* Tooltip indicator circle */}
+        {tooltip && (
+          <circle
+            cx={tooltip.x}
+            cy={tooltip.y}
+            r={isFullscreenMode ? "6" : "5"}
+            fill={tooltip.color}
+            stroke="white"
+            strokeWidth="2"
+            className="drop-shadow-lg"
+          />
+        )}
       </svg>
 
-      <div
-        className={`absolute ${isFullscreenMode ? "bottom-4 left-4" : "bottom-2 left-2"} bg-white/95 backdrop-blur-sm rounded-lg p-3 shadow-lg max-w-xs`}
-      >
-        <div className="space-y-1.5">
-          {chartData[0]?.values.filter(v => v).slice(0, 7).map((sensorValue, index: number) => (
-            <div key={`legend-${index}`} className={`flex items-center space-x-2 ${isFullscreenMode ? "text-sm" : "text-xs"}`}>
-              <div
-                className={`${isFullscreenMode ? "w-3 h-3" : "w-2.5 h-2.5"} rounded-full flex-shrink-0`}
-                style={{ backgroundColor: COLORS[index % COLORS.length] }}
-              ></div>
-              <span className="text-slate-700 font-medium truncate">{sensorValue.name}</span>
-              <span className="text-slate-500 text-[10px]">
-                {sensorValue.value.toFixed(1)} {unit}
-              </span>
-            </div>
-          ))}
-        </div>
-        {historicalData.length > 0 && (
-          <div className="mt-2 pt-2 border-t border-slate-200">
-            <p className="text-[9px] text-slate-400">
-              {chartData.length} puntos • Intervalo 10min
-            </p>
+      {/* Tooltip popup */}
+      {tooltip && (
+        <div 
+          className="absolute z-20 bg-slate-800 text-white text-xs rounded-lg px-3 py-2 shadow-xl pointer-events-none"
+          style={{
+            left: `${(tooltip.x / 400) * 100}%`,
+            top: `${(tooltip.y / 200) * 100}%`,
+            transform: 'translate(-50%, -120%)'
+          }}
+        >
+          <div className="font-semibold flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tooltip.color }}></div>
+            {tooltip.sensorName}
           </div>
-        )}
-      </div>
+          <div className="text-slate-300 mt-0.5">
+            {tooltip.value.toFixed(2)} {unit}
+          </div>
+          <div className="text-slate-400 text-[10px] mt-0.5">
+            {new Date(tooltip.timestamp).toLocaleString('es-ES', { 
+              day: '2-digit', 
+              month: '2-digit', 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            })}
+          </div>
+          {/* Arrow */}
+          <div className="absolute left-1/2 -bottom-1 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
+        </div>
+      )}
 
       <div
         className={`absolute left-1 top-1/2 transform -rotate-90 -translate-y-1/2 ${isFullscreenMode ? "text-sm" : "text-xs"} text-slate-600 font-medium`}
@@ -351,6 +454,49 @@ export function SensorChart({ type, sensors, isActive = false }: SensorChartProp
 
         <ChartContent isFullscreenMode={false} />
       </div>
+
+      {/* Stats panel below chart */}
+      {stats && (
+        <div className="mt-2 flex items-center justify-between bg-white/80 rounded-lg px-3 py-2 border border-slate-200 text-xs">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500">Mín:</span>
+              <span className="font-semibold text-blue-600">{stats.min.toFixed(1)} {unit}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500">Máx:</span>
+              <span className="font-semibold text-red-600">{stats.max.toFixed(1)} {unit}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-500">Tendencia:</span>
+            {stats.trend === "up" && (
+              <span className="flex items-center gap-0.5 font-semibold text-red-600">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                </svg>
+                Subiendo
+              </span>
+            )}
+            {stats.trend === "down" && (
+              <span className="flex items-center gap-0.5 font-semibold text-green-600">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+                Bajando
+              </span>
+            )}
+            {stats.trend === "stable" && (
+              <span className="flex items-center gap-0.5 font-semibold text-slate-600">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14" />
+                </svg>
+                Estable
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {isFullscreen && (
         <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center">
