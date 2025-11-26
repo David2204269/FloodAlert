@@ -22,6 +22,7 @@ interface SensorData {
   precipitation: number
   riskLevel: "normal" | "alert" | "danger"
   lastUpdate: string
+  createdAt?: string
 }
 
 interface RiskCounts {
@@ -287,6 +288,9 @@ export function FloodDashboard() {
       const result = await response.json()
 
       if (result.ok && result.data) {
+        // Asegurar orden por fecha (descendente) para que la primera lectura sea la más reciente
+        result.data.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
         // Contar lecturas por nivel de riesgo
         const counts: RiskCounts = { normal: 0, alert: 0, danger: 0 }
         
@@ -318,7 +322,8 @@ export function FloodDashboard() {
             riskLevel,
             lastUpdate: lectura.created_at
               ? new Date(lectura.created_at).toLocaleString('es-ES')
-              : 'Hace un momento'
+              : 'Hace un momento',
+            createdAt: lectura.created_at || undefined,
           }
         })
 
